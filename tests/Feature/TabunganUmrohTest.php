@@ -22,6 +22,7 @@
  *   - test_superadmin_and_admin_can_edit_kloter()
  *   - test_kloter_update_validation()
  *   - test_notification_service_and_modal_popup_integration()
+ *   - test_default_superadmin_always_exists_and_can_authenticate()
  * Side Effect: Database read/write dalam transaction rollback
  */
 
@@ -1258,5 +1259,31 @@ class TabunganUmrohTest extends TestCase
         $jamaahResponse->assertSee('Kloter Notif Test B');
         $jamaahResponse->assertSee('INV-TEST-NOTIF-001');
     }
+
+    /**
+     * Memverifikasi akun default Superadmin selalu ada dan dapat diautentikasi
+     */
+    public function test_default_superadmin_always_exists_and_can_authenticate(): void
+    {
+        $superadmin = User::where('email', 'superadmin@haramain.com')->first();
+
+        // 1. Pastikan record superadmin ditemukan
+        $this->assertNotNull($superadmin, 'Akun superadmin default harus otomatis ada di database.');
+        $this->assertEquals(User::ROLE_SUPERADMIN, $superadmin->role);
+        $this->assertTrue($superadmin->isSuperAdmin());
+
+        // 2. Pastikan password default terverifikasi
+        $this->assertTrue(Hash::check('password', $superadmin->password));
+
+        // 3. Pastikan bisa login via form login dan redirect ke dashboard admin
+        $response = $this->post(route('login'), [
+            'email' => 'superadmin@haramain.com',
+            'password' => 'password',
+        ]);
+
+        $response->assertRedirect(route('admin.dashboard'));
+        $this->assertAuthenticatedAs($superadmin);
+    }
 }
+
 
