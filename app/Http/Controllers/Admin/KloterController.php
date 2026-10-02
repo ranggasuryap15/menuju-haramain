@@ -2,7 +2,6 @@
 
 /**
  * File: app/Http/Controllers/Admin/KloterController.php
- * Tujuan: Manajemen master kloter tabungan umroh (pembuatan kloter, pengubahan detail kloter, normalisasi kode kloter selalu UPPERCASE, asosiasi multi-rekening bank per kloter, rentang periode, tarif per pax, detail peserta kloter, rekapitulasi dana terkumpul riil, dan penagihan spesifik per-kloter)
  * Tujuan: Manajemen master kloter tabungan umroh (pembuatan kloter, pengubahan detail kloter, normalisasi kode kloter selalu UPPERCASE, asosiasi multi-rekening bank per kloter, rentang periode, tarif per pax, detail peserta kloter, rekapitulasi dana terkumpul riil, riwayat transaksi pembayaran jamaah kloter berpaginasi descending, dan penagihan spesifik per-kloter)
  * Dipakai Oleh: routes/web.php (/admin/kloters, /admin/kloters/create, /admin/kloters/{kloter}, /admin/kloters/{kloter}/edit, /admin/kloters/{kloter}/trigger-billing)
  * Dependensi Utama: App\Models\Kloter, App\Models\BankAccount, App\Models\Payment, App\Services\BillingService, Request, Illuminate\Validation\Rule
@@ -126,7 +125,11 @@ class KloterController extends Controller
     public function edit(Kloter $kloter): View
     {
         $kloter->load('bankAccounts');
-        $bankAccounts = BankAccount::where('is_active', true)->orderBy('bank_name')->get();
+        $bankAccounts = BankAccount::query()
+            ->where('is_active', true)
+            ->orWhereIn('id', $kloter->bankAccounts->pluck('id'))
+            ->orderBy('bank_name')
+            ->get();
 
         return view('admin.kloters.edit', compact('kloter', 'bankAccounts'));
     }

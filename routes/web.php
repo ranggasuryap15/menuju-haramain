@@ -1,13 +1,14 @@
 <?php
 /**
  * File: routes/web.php
- * Tujuan: Definisi rute web aplikasi Tabungan Umroh (Autentikasi guest, Portal Jamaah, Portal Admin Keuangan & Superadmin, Manajemen Tagihan, Manajemen Pengguna)
+ * Tujuan: Definisi rute web aplikasi Tabungan Umroh (Autentikasi guest, Portal Jamaah, Portal Admin Keuangan & Superadmin, Manajemen Tagihan, Manajemen Rekening Bank, Manajemen Pengguna)
  * Dipakai Oleh: Laravel Routing Kernel
  * Dependensi Utama: AuthController, Jamaah\* Controllers, Admin\* Controllers, UserController
- * Daftar Rute Utama: /login, /register, /profile, /jamaah/*, /admin/*, /admin/invoices/*, /admin/users/*
+ * Daftar Rute Utama: /login, /register, /profile, /jamaah/*, /admin/*, /admin/invoices/*, /admin/bank-accounts/*, /admin/users/*
  * Side Effect: Penanganan HTTP request dan proteksi middleware guest, auth, serta role
  */
 
+use App\Http\Controllers\Admin\BankAccountController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\InvoiceController as AdminInvoiceController;
 use App\Http\Controllers\Admin\KloterController;
@@ -99,6 +100,10 @@ Route::middleware(['auth', 'role:superadmin,admin_keuangan'])->prefix('admin')->
     Route::put('/kloters/{kloter}', [KloterController::class, 'update'])->name('kloters.update');
     Route::post('/kloters/trigger-billing', [KloterController::class, 'triggerBilling'])->name('kloters.trigger-billing');
     Route::post('/kloters/{kloter}/trigger-billing', [KloterController::class, 'triggerKloterBilling'])->name('kloters.trigger-kloter-billing');
+
+    // Manajemen Rekening Bank Penampung Kloter (Tambah & Edit Detail)
+    Route::post('/bank-accounts', [BankAccountController::class, 'store'])->name('bank-accounts.store');
+    Route::put('/bank-accounts/{bankAccount}', [BankAccountController::class, 'update'])->name('bank-accounts.update');
 
     // Monitoring Tagihan Jama'ah (Superadmin & Admin Keuangan)
     Route::get('/invoices', [AdminInvoiceController::class, 'index'])->name('invoices.index');

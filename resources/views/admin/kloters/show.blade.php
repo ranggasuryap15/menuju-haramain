@@ -1,11 +1,11 @@
 {{--
 /**
  * File: resources/views/admin/kloters/show.blade.php
- * Tujuan: Menampilkan rincian detail master kloter umroh, panel pemicu penagihan khusus kloter ini (per bulan atau sekaligus sejak awal kloter), agregat keuangan, daftar rekening bank penampung kloter, tombol navigasi edit kloter, daftar pendaftar keluarga beserta anggota pax & status awal penagihan, serta tabel riwayat transaksi pembayaran jamaah lengkap dengan paginasi descending
+ * Tujuan: Menampilkan rincian detail master kloter umroh, panel pemicu penagihan khusus kloter ini, agregat keuangan, manajemen & edit detail rekening bank penampung kloter, tombol navigasi edit kloter, daftar pendaftar keluarga beserta anggota pax & status awal penagihan, serta tabel riwayat transaksi pembayaran jamaah lengkap dengan paginasi descending
  * Dipakai Oleh: App\Http\Controllers\Admin\KloterController@show
  * Dependensi Utama: Tailwind CSS CDN, Alpine.js, App\Models\Kloter, App\Models\BankAccount, App\Models\Payment
- * Daftar Komponen Utama: Breadcrumb, Tombol aksi edit & generate tagihan kloter, Panel penagihan kloter terpisah, Metrik keuangan & agregasi pax kloter, informasi paket, kartu rekening bank tujuan kloter, tabel pendaftar keluarga dengan status awal tagihan, tabel riwayat transaksi pembayaran jamaah berpaginasi descending, modal generate tagihan kloter per bulan / catch-up all pending
- * Side Effect: Tampilan detail kloter, POST form ke admin.kloters.trigger-kloter-billing untuk penerbitan invoice per-kloter
+ * Daftar Komponen Utama: Breadcrumb, Tombol aksi edit & generate tagihan kloter, Panel penagihan kloter terpisah, Metrik keuangan & agregasi pax kloter, informasi paket, kartu rekening bank tujuan kloter dengan tombol edit modal & tambah rekening, tabel pendaftar keluarga dengan status awal tagihan, tabel riwayat transaksi pembayaran jamaah berpaginasi descending, modal edit rekening bank, modal tambah rekening baru, modal generate tagihan kloter per bulan
+ * Side Effect: Tampilan detail kloter, POST form ke admin.kloters.trigger-kloter-billing, PUT form ke admin.bank-accounts.update, POST form ke admin.bank-accounts.store
  */
 --}}
 @extends('layouts.app')
@@ -13,7 +13,12 @@
 @section('title', 'Detail Kloter - ' . $kloter->name)
 
 @section('content')
-<div class="space-y-6" x-data="{ showTriggerModal: false }">
+<div class="space-y-6" x-data="{ 
+    showTriggerModal: false,
+    showEditBankModal: false,
+    showAddBankModal: false,
+    editBank: { id: null, bank_name: '', account_number: '', account_holder: '', is_active: true }
+}">
     <!-- Breadcrumb & Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -155,35 +160,51 @@
 
     <!-- Rekening Bank Tujuan Transfer Kloter -->
     <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div>
                 <h3 class="font-bold text-gray-900 text-base flex items-center gap-2">
-                    <svg class="w-5 h-5 text-haramain-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                    <svg class="w-5 h-5 text-[#346733]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
                     Rekening Bank Tujuan Pembayaran Kloter
                 </h3>
                 <p class="text-xs text-gray-500 mt-0.5">Rekening penampung dana tabungan umroh yang ditautkan khusus untuk kloter ini</p>
             </div>
-            <a href="{{ route('admin.kloters.edit', $kloter) }}" class="text-xs font-bold text-[#346733] hover:underline flex items-center gap-1">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-                Kelola Rekening
-            </a>
+            <div class="flex items-center gap-2">
+                <button type="button" @click="showAddBankModal = true" class="text-xs font-bold text-white bg-[#346733] hover:bg-[#234622] px-3 py-1.5 rounded-lg shadow-xs transition flex items-center gap-1 cursor-pointer">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    <span>+ Rekening Baru</span>
+                </button>
+                <a href="{{ route('admin.kloters.edit', $kloter) }}" class="text-xs font-bold text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 px-3 py-1.5 rounded-lg shadow-xs transition flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                    <span>Kelola Pilihan Rekening</span>
+                </a>
+            </div>
         </div>
 
         @if($kloter->bankAccounts->isNotEmpty())
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 @foreach($kloter->bankAccounts as $bank)
-                    <div class="p-4 rounded-xl border border-gray-200 bg-gray-50/70 hover:bg-emerald-50/30 hover:border-emerald-200 transition">
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-gray-900">{{ $bank->bank_name }}</span>
-                            <span class="px-2 py-0.5 rounded text-[10px] font-bold {{ $bank->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600' }}">
-                                {{ $bank->is_active ? 'Aktif' : 'Nonaktif' }}
-                            </span>
+                    <div class="p-4 rounded-xl border border-gray-200 bg-gray-50/70 hover:bg-emerald-50/30 hover:border-emerald-200 transition flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-gray-900">{{ $bank->bank_name }}</span>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold {{ $bank->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600' }}">
+                                    {{ $bank->is_active ? 'Aktif' : 'Nonaktif' }}
+                                </span>
+                            </div>
+                            <div class="font-mono text-base font-extrabold text-[#346733] mt-2">
+                                {{ $bank->account_number }}
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">
+                                a/n {{ $bank->account_holder }}
+                            </div>
                         </div>
-                        <div class="font-mono text-base font-extrabold text-[#346733] mt-2">
-                            {{ $bank->account_number }}
-                        </div>
-                        <div class="text-xs text-gray-500 mt-1">
-                            a/n {{ $bank->account_holder }}
+                        <div class="mt-3 pt-3 border-t border-gray-200/80 flex items-center justify-end">
+                            <button type="button" 
+                                @click="editBank = { id: {{ $bank->id }}, bank_name: '{{ addslashes($bank->bank_name) }}', account_number: '{{ addslashes($bank->account_number) }}', account_holder: '{{ addslashes($bank->account_holder) }}', is_active: {{ $bank->is_active ? 'true' : 'false' }} }; showEditBankModal = true;"
+                                class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-emerald-700 hover:text-emerald-900 bg-white hover:bg-emerald-50 border border-emerald-300 rounded-lg shadow-2xs transition cursor-pointer">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                <span>Edit Detail</span>
+                            </button>
                         </div>
                     </div>
                 @endforeach
@@ -191,9 +212,17 @@
         @else
             <div class="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-3">
                 <svg class="w-5 h-5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                <div>
+                <div class="flex-1">
                     <span class="font-bold block">Belum Ada Rekening Bank Khusus yang Ditautkan</span>
-                    <p class="mt-0.5 text-amber-700">Secara otomatis, jamaah pada kloter ini akan disajikan semua rekening penampung aktif umum. Anda dapat memilih rekening khusus kloter ini melalui tombol <a href="{{ route('admin.kloters.edit', $kloter) }}" class="underline font-bold">Edit Kloter</a>.</p>
+                    <p class="mt-0.5 text-amber-700">Secara otomatis, jamaah pada kloter ini akan disajikan semua rekening penampung aktif umum. Anda dapat menambahkan rekening baru khusus atau memilih rekening yang ada.</p>
+                    <div class="mt-2.5 flex items-center gap-2">
+                        <button type="button" @click="showAddBankModal = true" class="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg shadow-xs text-xs cursor-pointer">
+                            + Tambah Rekening Khusus
+                        </button>
+                        <a href="{{ route('admin.kloters.edit', $kloter) }}" class="px-3 py-1 bg-white hover:bg-gray-100 text-gray-800 font-bold border border-gray-300 rounded-lg shadow-xs text-xs">
+                            Pilih Dari Rekening Ada
+                        </a>
+                    </div>
                 </div>
             </div>
         @endif
@@ -524,6 +553,116 @@
                         </button>
                         <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold text-white bg-[#346733] hover:bg-[#234622] shadow cursor-pointer">
                             Jalankan Generate Kloter Ini
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Edit Detail Rekening Bank -->
+    <div x-show="showEditBankModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div x-show="showEditBankModal" x-transition.opacity class="fixed inset-0 bg-gray-500/75 transition-opacity" @click="showEditBankModal = false"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div x-show="showEditBankModal" x-transition class="relative inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full p-6">
+                <div class="flex items-center justify-between pb-3 border-b border-gray-200">
+                    <h3 class="text-base font-bold text-gray-900 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                        <span>Edit Detail Rekening Bank</span>
+                    </h3>
+                    <button type="button" @click="showEditBankModal = false" class="text-gray-400 hover:text-gray-600 text-lg font-bold">&times;</button>
+                </div>
+
+                <form :action="'/admin/bank-accounts/' + editBank.id" method="POST" class="mt-4 space-y-4">
+                    @csrf
+                    @method('PUT')
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Nama Bank / Institusi</label>
+                        <input type="text" name="bank_name" x-model="editBank.bank_name" required placeholder="Contoh: Bank Syariah Indonesia (BSI)" class="w-full text-sm rounded-xl border-gray-300 shadow-sm focus:border-emerald-600 focus:ring-emerald-600 px-3 py-2">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Nomor Rekening</label>
+                        <input type="text" name="account_number" x-model="editBank.account_number" required placeholder="Contoh: 7123456789" class="w-full text-sm font-mono rounded-xl border-gray-300 shadow-sm focus:border-emerald-600 focus:ring-emerald-600 px-3 py-2">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Atas Nama (Pemilik Rekening)</label>
+                        <input type="text" name="account_holder" x-model="editBank.account_holder" required placeholder="Contoh: Yayasan Tabungan Umroh" class="w-full text-sm rounded-xl border-gray-300 shadow-sm focus:border-emerald-600 focus:ring-emerald-600 px-3 py-2">
+                    </div>
+
+                    <div class="pt-2">
+                        <label class="inline-flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" name="is_active" value="1" x-model="editBank.is_active" class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-gray-300">
+                            <span class="text-xs font-semibold text-gray-800">Rekening Aktif (Dapat digunakan dan tampil pada tagihan)</span>
+                        </label>
+                    </div>
+
+                    <div class="pt-4 border-t border-gray-200 flex items-center justify-end gap-2">
+                        <button type="button" @click="showEditBankModal = false" class="px-4 py-2 rounded-xl border border-gray-300 text-xs font-bold text-gray-700 hover:bg-gray-50 transition cursor-pointer">
+                            Batal
+                        </button>
+                        <button type="submit" class="px-4 py-2 rounded-xl text-xs font-bold text-white shadow-sm transition bg-[#346733] hover:bg-[#234622] cursor-pointer">
+                            Simpan Perubahan Rekening
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Tambah Rekening Bank Baru -->
+    <div x-show="showAddBankModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div x-show="showAddBankModal" x-transition.opacity class="fixed inset-0 bg-gray-500/75 transition-opacity" @click="showAddBankModal = false"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div x-show="showAddBankModal" x-transition class="relative inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full p-6">
+                <div class="flex items-center justify-between pb-3 border-b border-gray-200">
+                    <h3 class="text-base font-bold text-gray-900 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        <span>Tambah Rekening Bank Baru</span>
+                    </h3>
+                    <button type="button" @click="showAddBankModal = false" class="text-gray-400 hover:text-gray-600 text-lg font-bold">&times;</button>
+                </div>
+
+                <form action="{{ route('admin.bank-accounts.store') }}" method="POST" class="mt-4 space-y-4">
+                    @csrf
+                    <input type="hidden" name="kloter_id" value="{{ $kloter->id }}">
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Nama Bank / Institusi</label>
+                        <input type="text" name="bank_name" required placeholder="Contoh: Bank Syariah Indonesia (BSI)" class="w-full text-sm rounded-xl border-gray-300 shadow-sm focus:border-emerald-600 focus:ring-emerald-600 px-3 py-2">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Nomor Rekening</label>
+                        <input type="text" name="account_number" required placeholder="Contoh: 7123456789" class="w-full text-sm font-mono rounded-xl border-gray-300 shadow-sm focus:border-emerald-600 focus:ring-emerald-600 px-3 py-2">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Atas Nama (Pemilik Rekening)</label>
+                        <input type="text" name="account_holder" required placeholder="Contoh: Yayasan Tabungan Umroh" class="w-full text-sm rounded-xl border-gray-300 shadow-sm focus:border-emerald-600 focus:ring-emerald-600 px-3 py-2">
+                    </div>
+
+                    <div class="pt-2">
+                        <label class="inline-flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" name="is_active" value="1" checked class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-gray-300">
+                            <span class="text-xs font-semibold text-gray-800">Langsung Aktifkan Rekening</span>
+                        </label>
+                    </div>
+
+                    <p class="text-[11px] text-gray-500 bg-emerald-50 p-2.5 rounded-lg border border-emerald-100">
+                        Rekening baru ini akan otomatis ditautkan ke kloter <strong>{{ $kloter->name }}</strong>.
+                    </p>
+
+                    <div class="pt-4 border-t border-gray-200 flex items-center justify-end gap-2">
+                        <button type="button" @click="showAddBankModal = false" class="px-4 py-2 rounded-xl border border-gray-300 text-xs font-bold text-gray-700 hover:bg-gray-50 transition cursor-pointer">
+                            Batal
+                        </button>
+                        <button type="submit" class="px-4 py-2 rounded-xl text-xs font-bold text-white shadow-sm transition bg-[#346733] hover:bg-[#234622] cursor-pointer">
+                            Simpan Rekening
                         </button>
                     </div>
                 </form>

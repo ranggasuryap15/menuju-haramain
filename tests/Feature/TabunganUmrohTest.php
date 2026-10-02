@@ -36,6 +36,7 @@
  *   - test_retroactive_billing_and_catchup_generation_for_older_periods()
  *   - test_kloter_show_displays_paginated_payments_history_descending()
  *   - test_superadmin_and_admin_keuangan_can_access_and_filter_unpaid_invoices_monitoring()
+ *   - test_admin_and_superadmin_can_update_bank_account_details_and_add_new_bank()
  * Side Effect: Database read/write dalam transaction rollback
  */
 
@@ -2382,6 +2383,109 @@ class TabunganUmrohTest extends TestCase
         $detailResponse->assertSee('Jamaah Fauzi');
         $detailResponse->assertSee('Kloter Monitoring A');
     }
+
+    /**
+     * Uji Superadmin dan Admin Keuangan dapat mengedit detail rekening bank yang sudah ada
+     * dan menambahkan rekening bank penampung baru pada kloter
+     */
+    public function test_admin_and_superadmin_can_update_bank_account_details_and_add_new_bank(): void
+    {
+        $superadmin = User::factory()->create(['role' => User::ROLE_SUPERADMIN]);
+        $adminKeuangan = User::factory()->create(['role' => User::ROLE_ADMIN_KEUANGAN]);
+        $jamaah = User::factory()->create(['role' => User::ROLE_JAMAAH]);
+
+        $kloter = Kloter::create([
+            'name' => 'Kloter Rekening Test',
+            'code' => 'KLT-BANK-01',
+            'target_per_pax' => 30000000.0,
+            'monthly_per_pax' => 1500000.0,
+            'start_date' => Carbon::now()->startOfMonth(),
+            'end_date' => Carbon::now()->addMonths(20)->endOfMonth(),
+            'status' => 'active',
+        ]);
+
+        $bank = BankAccount::create([
+            'bank_name' => 'BSI Lama',
+            'account_number' => '1112223334',
+            'account_holder' => 'Pemilik Lama',
+            'is_active' => true,
+        ]);
+        $kloter->bankAccounts()->attach($bank->id);
+
+        // 1. Jamaah biasa dilarang mengedit atau menambah rekening bank
+        $forbiddenUpdate = $this->actingAs($jamaah)->put(route('admin.bank-accounts.update', $bank), [
+            'bank_name' => 'Hacker Bank',
+            'account_number' => '9999999',
+            'account_holder' => 'Hacker',
+        ]);
+        $forbiddenUpdate->assertStatus(403);
+
+        $forbiddenStore = $this->actingAs($jamaah)->post(route('admin.bank-accounts.store'), [
+            'bank_name' => 'Hacker Bank 2',
+            'account_number' => '8888888',
+            'account_holder' => 'Hacker',
+        ]);
+        $forbiddenStore->assertStatus(403);
+
+        // 2. Admin Keuangan dapat memperbarui detail rekening bank yang sudah ada
+        $updateResponse = $this->actingAs($adminKeuangan)->put(route('admin.bank-accounts.update', $bank), [
+            'bank_name' => 'BSI Syariah Diperbarui',
+            'account_number' => '7778889990',
+            'account_holder' => 'Yayasan Haramain Utama',
+            'is_active' => '1',
+        ]);
+        $updateResponse->assertRedirect();
+        $updateResponse->assertSessionHas('success');
+
+        $bank->refresh();
+        $this->assertEquals('BSI Syariah Diperbarui', $bank->bank_name);
+        $this->assertEquals('7778889990', $bank->account_number);
+        $this->assertEquals('Yayasan Haramain Utama', $bank->account_holder);
+        $this->assertTrue($bank->is_active);
+
+        // 3. Superadmin dapat menonaktifkan rekening bank via update
+        $deactivateResponse = $this->actingAs($superadmin)->put(route('admin.bank-accounts.update', $bank), [
+            'bank_name' => 'BSI Syariah Diperbarui',
+            'account_number' => '7778889990',
+            'account_holder' => 'Yayasan Haramain Utama',
+            // is_active tidak dikirim / bernilai 0
+        ]);
+        $deactivateResponse->assertRedirect();
+        $bank->refresh();
+        $this->assertFalse($bank->is_active);
+
+        // 4. Admin Keuangan dapat menambahkan rekening bank baru langsung dengan tautan kloter
+        $storeResponse = $this->actingAs($adminKeuangan)->post(route('admin.bank-accounts.store'), [
+            'kloter_id' => $kloter->id,
+            'bank_name' => 'Bank Muamalat Baru',
+            'account_number' => '5554443322',
+            'account_holder' => 'Bendahara Kloter',
+            'is_active' => '1',
+        ]);
+        $storeResponse->assertRedirect();
+        $storeResponse->assertSessionHas('success');
+
+        $newBank = BankAccount::where('account_number', '5554443322')->first();
+        $this->assertNotNull($newBank);
+        $this->assertEquals('Bank Muamalat Baru', $newBank->bank_name);
+        $this->assertTrue($kloter->bankAccounts()->where('bank_accounts.id', $newBank->id)->exists());
+
+        // 5. Verifikasi tampilan halaman kloter show menampilkan rekening yang diperbarui dan tombol Edit Detail
+        $showResponse = $this->actingAs($superadmin)->get(route('admin.kloters.show', $kloter));
+        $showResponse->assertStatus(200);
+        $showResponse->assertSee('BSI Syariah Diperbarui');
+        $showResponse->assertSee('7778889990');
+        $showResponse->assertSee('Bank Muamalat Baru');
+        $showResponse->assertSee('Edit Detail');
+        $showResponse->assertSee('+ Rekening Baru');
+
+        // 6. Verifikasi tampilan halaman kloter edit menampilkan rekening dan tombol Edit
+        $editResponse = $this->actingAs($superadmin)->get(route('admin.kloters.edit', $kloter));
+        $editResponse->assertStatus(200);
+        $editResponse->assertSee('BSI Syariah Diperbarui');
+        $editResponse->assertSee('Bank Muamalat Baru');
+    }
 }
+
 
 

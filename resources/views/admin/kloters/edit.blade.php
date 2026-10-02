@@ -1,11 +1,11 @@
 {{--
 /**
  * File: resources/views/admin/kloters/edit.blade.php
- * Tujuan: Formulir pengubahan rincian master kloter umroh (nama, kode auto-uppercase, target tabungan, cicilan, tanggal periode, status, relasi multi-rekening bank penampung, deskripsi) oleh Superadmin dan Admin Keuangan
+ * Tujuan: Formulir pengubahan rincian master kloter umroh (nama, kode auto-uppercase, target tabungan, cicilan, tanggal periode, status, relasi & edit detail multi-rekening bank penampung, deskripsi) oleh Superadmin dan Admin Keuangan
  * Dipakai Oleh: App\Http\Controllers\Admin\KloterController@edit (GET /admin/kloters/{kloter}/edit)
  * Dependensi Utama: layouts.app, Tailwind CSS, Alpine.js, App\Models\Kloter, App\Models\BankAccount
- * Daftar Komponen Utama: Breadcrumb, Input nama & kode unik (auto-uppercase), Periode tanggal dinamis, Mode keuangan target/cicilan per pax, Pilihan status kloter, Checklist rekening bank kloter, Input deskripsi/fasilitas, Tombol update
- * Side Effect: PUT request form ke route('admin.kloters.update', $kloter)
+ * Daftar Komponen Utama: Breadcrumb, Input nama & kode unik (auto-uppercase), Periode tanggal dinamis, Mode keuangan target/cicilan per pax, Pilihan status kloter, Checklist rekening bank kloter dengan tombol edit modal & tambah rekening baru, Input deskripsi/fasilitas, Modal edit rekening bank, Tombol update
+ * Side Effect: PUT request form ke route('admin.kloters.update', $kloter), PUT request form ke route('admin.bank-accounts.update', $bank)
  */
 --}}
 @extends('layouts.app')
@@ -18,6 +18,8 @@
     endDate: '{{ old('end_date', $kloter->end_date ? $kloter->end_date->format('Y-m-d') : '') }}',
     targetPax: {{ (int) old('target_per_pax', (int)$kloter->target_per_pax) }},
     monthlyPax: {{ (int) old('monthly_per_pax', (int)$kloter->monthly_per_pax) }},
+    showEditBankModal: false,
+    editBank: { id: null, bank_name: '', account_number: '', account_holder: '', is_active: true },
     formatRupiah(val) {
         if (!val) return '';
         let num = val.toString().replace(/[^0-9]/g, '');
@@ -173,18 +175,31 @@
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     @forelse($bankAccounts as $bank)
-                        <label class="relative flex items-start p-3.5 rounded-xl border border-gray-200 cursor-pointer hover:bg-gray-50 transition has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50/40">
-                            <div class="flex items-center h-5">
-                                <input type="checkbox" name="bank_account_ids[]" value="{{ $bank->id }}"
-                                    {{ in_array($bank->id, $selectedBankIds) ? 'checked' : '' }}
-                                    class="w-4 h-4 rounded text-[#346733] focus:ring-[#346733] border-gray-300">
-                            </div>
-                            <div class="ml-3 text-xs">
-                                <span class="font-bold text-gray-900 block">{{ $bank->bank_name }}</span>
-                                <span class="font-mono text-gray-700 block mt-0.5">{{ $bank->account_number }}</span>
-                                <span class="text-gray-400 block mt-0.5">a/n {{ $bank->account_holder }}</span>
-                            </div>
-                        </label>
+                        <div class="relative flex items-start justify-between p-3.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition">
+                            <label class="flex items-start cursor-pointer flex-1 mr-2">
+                                <div class="flex items-center h-5">
+                                    <input type="checkbox" name="bank_account_ids[]" value="{{ $bank->id }}"
+                                        {{ in_array($bank->id, $selectedBankIds) ? 'checked' : '' }}
+                                        class="w-4 h-4 rounded text-[#346733] focus:ring-[#346733] border-gray-300">
+                                </div>
+                                <div class="ml-3 text-xs">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="font-bold text-gray-900 block">{{ $bank->bank_name }}</span>
+                                        <span class="px-1.5 py-0.2 rounded text-[9px] font-semibold {{ $bank->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600' }}">
+                                            {{ $bank->is_active ? 'Aktif' : 'Nonaktif' }}
+                                        </span>
+                                    </div>
+                                    <span class="font-mono text-gray-700 block mt-0.5">{{ $bank->account_number }}</span>
+                                    <span class="text-gray-400 block mt-0.5">a/n {{ $bank->account_holder }}</span>
+                                </div>
+                            </label>
+                            <button type="button" 
+                                @click.prevent.stop="editBank = { id: {{ $bank->id }}, bank_name: '{{ addslashes($bank->bank_name) }}', account_number: '{{ addslashes($bank->account_number) }}', account_holder: '{{ addslashes($bank->account_holder) }}', is_active: {{ $bank->is_active ? 'true' : 'false' }} }; showEditBankModal = true;"
+                                class="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-white hover:bg-emerald-50 border border-emerald-300 rounded px-2 py-1 shadow-2xs cursor-pointer inline-flex items-center gap-1 shrink-0">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                <span>Edit</span>
+                            </button>
+                        </div>
                     @empty
                         <div class="col-span-2 p-4 text-center rounded-xl bg-gray-50 border border-dashed border-gray-300 text-xs text-gray-500">
                             Belum ada master rekening bank. Silakan tambahkan rekening bank di bawah.
@@ -233,6 +248,59 @@
                 </button>
             </div>
         </form>
+    </div>
+
+    <!-- Modal Edit Detail Rekening Bank -->
+    <div x-show="showEditBankModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div x-show="showEditBankModal" x-transition.opacity class="fixed inset-0 bg-gray-500/75 transition-opacity" @click="showEditBankModal = false"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div x-show="showEditBankModal" x-transition class="relative inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full p-6">
+                <div class="flex items-center justify-between pb-3 border-b border-gray-200">
+                    <h3 class="text-base font-bold text-gray-900 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                        <span>Edit Detail Rekening Bank</span>
+                    </h3>
+                    <button type="button" @click="showEditBankModal = false" class="text-gray-400 hover:text-gray-600 text-lg font-bold">&times;</button>
+                </div>
+
+                <form :action="'/admin/bank-accounts/' + editBank.id" method="POST" class="mt-4 space-y-4">
+                    @csrf
+                    @method('PUT')
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Nama Bank / Institusi</label>
+                        <input type="text" name="bank_name" x-model="editBank.bank_name" required placeholder="Contoh: Bank Syariah Indonesia (BSI)" class="w-full text-sm rounded-xl border-gray-300 shadow-sm focus:border-emerald-600 focus:ring-emerald-600 px-3 py-2">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Nomor Rekening</label>
+                        <input type="text" name="account_number" x-model="editBank.account_number" required placeholder="Contoh: 7123456789" class="w-full text-sm font-mono rounded-xl border-gray-300 shadow-sm focus:border-emerald-600 focus:ring-emerald-600 px-3 py-2">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 mb-1">Atas Nama (Pemilik Rekening)</label>
+                        <input type="text" name="account_holder" x-model="editBank.account_holder" required placeholder="Contoh: Yayasan Tabungan Umroh" class="w-full text-sm rounded-xl border-gray-300 shadow-sm focus:border-emerald-600 focus:ring-emerald-600 px-3 py-2">
+                    </div>
+
+                    <div class="pt-2">
+                        <label class="inline-flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" name="is_active" value="1" x-model="editBank.is_active" class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-gray-300">
+                            <span class="text-xs font-semibold text-gray-800">Rekening Aktif (Dapat digunakan dan tampil pada tagihan)</span>
+                        </label>
+                    </div>
+
+                    <div class="pt-4 border-t border-gray-200 flex items-center justify-end gap-2">
+                        <button type="button" @click="showEditBankModal = false" class="px-4 py-2 rounded-xl border border-gray-300 text-xs font-bold text-gray-700 hover:bg-gray-50 transition cursor-pointer">
+                            Batal
+                        </button>
+                        <button type="submit" class="px-4 py-2 rounded-xl text-xs font-bold text-white shadow-sm transition bg-[#346733] hover:bg-[#234622] cursor-pointer">
+                            Simpan Perubahan Rekening
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 @endsection
