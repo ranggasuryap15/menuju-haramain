@@ -31,7 +31,8 @@
         . "- *Nominal:* {$amountFormatted}\n"
         . "- *Bank Tujuan:* {$bankName}\n"
         . "- *Tanggal Transfer:* {$paymentDateFormatted}\n\n"
-        . "Bukti transfer telah saya upload di aplikasi. Mohon bantuannya untuk diverifikasi. Terima kasih.";
+        . "Bukti transfer telah saya upload di aplikasi.\n"
+        . "Alhamdulillah Jazakumullahu Khoiro.";
 
     $adminPhoneRaw = $adminContact?->phone ? preg_replace('/[^0-9]/', '', $adminContact->phone) : '';
     if ($adminPhoneRaw && str_starts_with($adminPhoneRaw, '0')) {
@@ -85,7 +86,7 @@
 
         <!-- Kolom Kiri (2 Kolom): Rincian Invoice & Form Pembayaran -->
         <div class="lg:col-span-2 space-y-6">
-            
+
             <!-- Rincian Item Tagihan Per Pax -->
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 space-y-4">
                 <h2 class="text-base font-bold text-slate-900 flex items-center justify-between">
@@ -179,7 +180,7 @@
                                 <p class="text-xs sm:text-sm text-emerald-900 leading-relaxed">
                                     Bukti pembayaran Anda telah berhasil kami terima. Untuk mempercepat proses verifikasi, silakan kirim notifikasi/reminder langsung ke WhatsApp Admin atau kabari di grup kloter.
                                 </p>
-                                
+
                                 <div class="pt-2 flex items-center flex-wrap gap-2.5">
                                     @if($waAdminReminderUrl)
                                         <a href="{{ $waAdminReminderUrl }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-all active:scale-[0.98]">
@@ -393,9 +394,9 @@
                                             <span>Reminder WA</span>
                                         </a>
                                     @endif
-                                    <a href="{{ $p->proof_url }}" 
+                                    <a href="{{ $p->proof_url }}"
                                        @click.prevent="$dispatch('open-proof-modal', { url: '{{ $p->proof_url }}', title: 'Bukti Transfer #{{ $invoice->invoice_number }}' })"
-                                       target="_blank" 
+                                       target="_blank"
                                        class="text-teal-700 font-bold underline text-[11px] cursor-pointer">
                                         Buka File Bukti &rarr;
                                     </a>
