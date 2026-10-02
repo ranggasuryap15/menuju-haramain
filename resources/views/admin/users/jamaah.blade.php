@@ -1,10 +1,10 @@
 <!--
 File: resources/views/admin/users/jamaah.blade.php
-Tujuan: Halaman manajemen data seluruh jama'ah untuk Superadmin (daftar, pencarian, pembuatan akun baru, edit data, reset password, dan promosi menjadi admin)
+Tujuan: Halaman manajemen data seluruh jama'ah untuk Superadmin (daftar, pencarian, pembuatan akun baru, edit data, reset password, promosi menjadi admin, dan penghapusan akun permanen)
 Dipakai Oleh: App\Http\Controllers\Admin\UserController@jamaahIndex (GET /admin/users/jamaah)
 Dependensi Utama: layouts.app, User, Alpine.js
-Daftar Komponen Utama: Kartu Statistik Ringkas, Filter Pencarian, Tabel Data Jama'ah, Modal Buat Jama'ah, Modal Edit Profil, Modal Reset Password, Modal Promosi Admin
-Side Effect: Form submit POST /admin/users/jamaah, PUT /admin/users/{user}, PUT /admin/users/{user}/reset-password, POST /admin/users/{user}/role
+Daftar Komponen Utama: Kartu Statistik Ringkas, Filter Pencarian, Tabel Data Jama'ah, Modal Buat Jama'ah, Modal Edit Profil, Modal Reset Password, Modal Promosi Admin, Modal Hapus Akun Jama'ah
+Side Effect: Form submit POST /admin/users/jamaah, PUT /admin/users/{user}, PUT /admin/users/{user}/reset-password, POST /admin/users/{user}/role, DELETE /admin/users/{user}
 -->
 @extends('layouts.app')
 
@@ -16,6 +16,7 @@ Side Effect: Form submit POST /admin/users/jamaah, PUT /admin/users/{user}, PUT 
     editModalOpen: false,
     resetPasswordModalOpen: false,
     promoteModalOpen: false,
+    deleteModalOpen: false,
     selectedUser: { id: null, name: '', email: '', phone: '' },
     openEdit(user) {
         this.selectedUser = { ...user };
@@ -28,6 +29,10 @@ Side Effect: Form submit POST /admin/users/jamaah, PUT /admin/users/{user}, PUT 
     openPromote(user) {
         this.selectedUser = { ...user };
         this.promoteModalOpen = true;
+    },
+    openDelete(user) {
+        this.selectedUser = { ...user };
+        this.deleteModalOpen = true;
     }
 }">
 
@@ -217,6 +222,14 @@ Side Effect: Form submit POST /admin/users/jamaah, PUT /admin/users/{user}, PUT 
                                             title="Jadikan staf Admin Keuangan">
                                         Jadikan Admin &rarr;
                                     </button>
+
+                                    <!-- Hapus Akun Jama'ah -->
+                                    <button type="button"
+                                            @click="openDelete({ id: {{ $jamaah->id }}, name: '{{ addslashes($jamaah->name) }}', email: '{{ addslashes($jamaah->email) }}' })"
+                                            class="px-2.5 py-1.5 rounded-lg border border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-semibold text-[11px] transition cursor-pointer"
+                                            title="Hapus akun jama'ah secara permanen beserta data kloter & transaksinya">
+                                        Hapus
+                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -265,7 +278,7 @@ Side Effect: Form submit POST /admin/users/jamaah, PUT /admin/users/{user}, PUT 
                     </div>
 
                     <!-- Tombol Aksi Mobile -->
-                    <div class="grid grid-cols-3 gap-1.5 pt-1">
+                    <div class="grid grid-cols-4 gap-1 pt-1">
                         <button type="button"
                                 @click="openEdit({ id: {{ $jamaah->id }}, name: '{{ addslashes($jamaah->name) }}', email: '{{ addslashes($jamaah->email) }}', phone: '{{ addslashes($jamaah->phone ?? '') }}' })"
                                 class="py-1.5 text-center rounded-lg border border-slate-200 text-slate-700 bg-white font-bold text-[10px]">
@@ -274,12 +287,17 @@ Side Effect: Form submit POST /admin/users/jamaah, PUT /admin/users/{user}, PUT 
                         <button type="button"
                                 @click="openResetPassword({ id: {{ $jamaah->id }}, name: '{{ addslashes($jamaah->name) }}' })"
                                 class="py-1.5 text-center rounded-lg border border-amber-300 text-amber-900 bg-amber-50 font-bold text-[10px]">
-                            Reset Pass
+                            Reset
                         </button>
                         <button type="button"
                                 @click="openPromote({ id: {{ $jamaah->id }}, name: '{{ addslashes($jamaah->name) }}' })"
                                 class="py-1.5 text-center rounded-lg border border-teal-300 text-[#007C6A] bg-teal-50 font-bold text-[10px]">
-                            Jadi Admin
+                            Admin
+                        </button>
+                        <button type="button"
+                                @click="openDelete({ id: {{ $jamaah->id }}, name: '{{ addslashes($jamaah->name) }}', email: '{{ addslashes($jamaah->email) }}' })"
+                                class="py-1.5 text-center rounded-lg border border-red-300 text-red-700 bg-red-50 font-bold text-[10px]">
+                            Hapus
                         </button>
                     </div>
                 </div>
@@ -477,6 +495,50 @@ Side Effect: Form submit POST /admin/users/jamaah, PUT /admin/users/{user}, PUT 
                         </button>
                         <button type="submit" class="px-4 py-2 rounded-xl bg-[#007C6A] hover:bg-[#006052] text-white font-bold transition shadow cursor-pointer text-xs">
                             Ya, Jadikan Admin
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- MODAL 5: HAPUS AKUN JAMA'AH (DANGER DELETE)                               -->
+    <!-- ========================================================================= -->
+    <div x-show="deleteModalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+        <div x-show="deleteModalOpen" x-transition.opacity class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm cursor-pointer" @click="deleteModalOpen = false"></div>
+        <div class="flex min-h-full items-center justify-center p-4">
+            <div x-show="deleteModalOpen" x-transition.scale class="relative w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl space-y-4 border border-red-200 text-center">
+                <div class="w-12 h-12 rounded-full bg-red-100 text-red-600 mx-auto flex items-center justify-center">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </div>
+
+                <div class="space-y-2">
+                    <h2 class="text-base font-extrabold text-slate-900">Hapus Akun Jama'ah Ini?</h2>
+                    <p class="text-xs text-slate-600">
+                        Anda akan menghapus akun <strong class="text-slate-900" x-text="selectedUser.name"></strong> (<span class="font-mono text-slate-500" x-text="selectedUser.email"></span>) secara permanen.
+                    </p>
+                    <div class="p-3 bg-red-50 rounded-xl text-left border border-red-200 space-y-1 text-[11px] text-red-800">
+                        <span class="font-bold block text-red-900">Peringatan Konsekuensi:</span>
+                        <ul class="list-disc list-inside space-y-0.5">
+                            <li>Seluruh anggota keluarga akun ini akan terhapus.</li>
+                            <li>Pendaftaran kloter, tagihan, dan histori setoran pembayaran akan dihapus.</li>
+                            <li>Seluruh berkas bukti transfer di server storage akan dibersihkan.</li>
+                            <li>Tindakan ini <strong>permanen dan tidak dapat dibatalkan</strong>.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <form :action="'{{ url('/admin/users') }}/' + selectedUser.id" method="POST" class="pt-2">
+                    @csrf
+                    @method('DELETE')
+
+                    <div class="flex items-center justify-center gap-2">
+                        <button type="button" @click="deleteModalOpen = false" class="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition cursor-pointer text-xs">
+                            Batal
+                        </button>
+                        <button type="submit" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold transition shadow cursor-pointer text-xs">
+                            Ya, Hapus Permanen
                         </button>
                     </div>
                 </form>

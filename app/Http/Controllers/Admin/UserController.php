@@ -1,22 +1,24 @@
 <?php
 /**
  * File: app/Http/Controllers/Admin/UserController.php
- * Tujuan: Pengelolaan akun pengguna oleh Superadmin (melihat data jamaah & admin, pembuatan akun baru, pengubahan role jamaah <-> admin, dan reset kata sandi)
+ * Tujuan: Pengelolaan akun pengguna oleh Superadmin (melihat data jamaah & admin, pembuatan akun baru, pengubahan role jamaah <-> admin, reset kata sandi, dan penghapusan akun beserta data cascade & berkas fisik bukti transfer)
  * Dipakai Oleh: Superadmin via routes/web.php (prefix /admin/users)
- * Dependensi Utama: App\Models\User, App\Models\FamilyMember, Illuminate\Support\Facades\Hash, DB
- * Daftar Fungsi Utama: jamaahIndex(), adminIndex(), storeJamaah(), storeAdmin(), update(), resetPassword(), changeRole()
- * Side Effect: Write DB tabel users & family_members (create/update/role switch)
+ * Dependensi Utama: App\Models\User, App\Models\FamilyMember, App\Models\Payment, Illuminate\Support\Facades\Hash, DB, Storage
+ * Daftar Fungsi Utama: jamaahIndex(), adminIndex(), storeJamaah(), storeAdmin(), update(), resetPassword(), changeRole(), destroy()
+ * Side Effect: Write DB tabel users, family_members, kloter_registrations, invoices, payments (cascade delete), dan penghapusan file fisik bukti transfer di storage
  */
 
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\FamilyMember;
+use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -230,5 +232,53 @@ class UserController extends Controller
 
         return redirect()->route('admin.users.jamaah')
             ->with('success', "Hak akses admin untuk {$user->name} berhasil dilepas dan kembali menjadi Jama'ah biasa.");
+    }
+
+    /**
+     * Menghapus akun pengguna secara permanen beserta data turunan:
+     * - Anggota keluarga
+     * - Pendaftaran kloter & paxes
+     * - Tagihan & rincian invoice
+     * - Transaksi pembayaran & berkas fisik bukti transfer di storage
+     */
+    public function destroy(User $user): RedirectResponse
+    {
+        $currentUserId = auth()->id();
+
+        // Keamanan 1: Cegah superadmin menghapus akunnya sendiri
+        if ($user->id === $currentUserId) {
+            return back()->with('error', 'Anda tidak dapat menghapus akun Anda sendiri.');
+        }
+
+        // Keamanan 2: Cegah penghapusan akun Superadmin lain
+        if ($user->isSuperAdmin()) {
+            return back()->with('error', 'Akun Superadmin tidak dapat dihapus.');
+        }
+
+        $userName = $user->name;
+        $userRole = $user->role;
+
+        DB::transaction(function () use ($user) {
+            // 1. Ambil seluruh berkas bukti pembayaran milik user untuk dibersihkan dari disk storage
+            $proofPaths = Payment::where('user_id', $user->id)
+                ->whereNotNull('proof_path')
+                ->pluck('proof_path')
+                ->filter()
+                ->toArray();
+
+            if (!empty($proofPaths)) {
+                Storage::disk('public')->delete($proofPaths);
+            }
+
+            // 2. Hapus user (Foreign keys MySQL akan menghapus otomatis data keluarga, kloter_registrations, registration_paxes, invoices, invoice_items, payments secara cascade)
+            $user->delete();
+        });
+
+        $redirectRoute = $userRole === User::ROLE_JAMAAH
+            ? 'admin.users.jamaah'
+            : 'admin.users.admins';
+
+        return redirect()->route($redirectRoute)
+            ->with('success', "Akun {$userName} beserta seluruh data kloter, tagihan, dan histori transaksinya berhasil dihapus.");
     }
 }

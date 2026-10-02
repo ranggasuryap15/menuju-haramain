@@ -119,6 +119,7 @@ Route::middleware(['auth', 'role:superadmin,admin_keuangan'])->prefix('admin')->
         Route::put('/{user}', [UserController::class, 'update'])->name('update');
         Route::put('/{user}/reset-password', [UserController::class, 'resetPassword'])->name('reset-password');
         Route::post('/{user}/role', [UserController::class, 'changeRole'])->name('change-role');
+        Route::delete('/{user}', [UserController::class, 'destroy'])->name('destroy');
     });
 });
 

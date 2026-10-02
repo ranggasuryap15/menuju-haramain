@@ -37,6 +37,7 @@
  *   - test_kloter_show_displays_paginated_payments_history_descending()
  *   - test_superadmin_and_admin_keuangan_can_access_and_filter_unpaid_invoices_monitoring()
  *   - test_admin_and_superadmin_can_update_bank_account_details_and_add_new_bank()
+ *   - test_superadmin_can_delete_jamaah_with_cascade_and_storage_cleanup()
  * Side Effect: Database read/write dalam transaction rollback
  */
 
@@ -2493,7 +2494,118 @@ class TabunganUmrohTest extends TestCase
         $editResponse->assertSee('BSI Syariah Diperbarui');
         $editResponse->assertSee('Bank Muamalat Baru');
     }
+
+    /**
+     * Uji Superadmin dapat menghapus akun jamaah secara permanen:
+     * - Menghapus seluruh data turunan (keluarga, kloter registration, paxes, invoices, items, payments) secara cascade
+     * - Menghapus berkas fisik bukti transfer dari storage
+     * - Mencegah superadmin menghapus dirinya sendiri
+     * - Mencegah jamaah biasa menghapus akun user lain
+     */
+    public function test_superadmin_can_delete_jamaah_with_cascade_and_storage_cleanup(): void
+    {
+        Storage::fake('public');
+
+        $superadmin = User::factory()->create(['role' => User::ROLE_SUPERADMIN]);
+        $otherJamaah = User::factory()->create(['role' => User::ROLE_JAMAAH]);
+        $targetJamaah = User::factory()->create([
+            'name' => 'Jamaah Dihapus',
+            'email' => 'dihapus@example.com',
+            'role' => User::ROLE_JAMAAH,
+        ]);
+
+        $familyMember = FamilyMember::create([
+            'user_id' => $targetJamaah->id,
+            'full_name' => 'Anggota Keluarga Dihapus',
+            'relationship' => 'Istri',
+            'gender' => 'P',
+        ]);
+
+        $kloter = Kloter::create([
+            'name' => 'Kloter Hapus Test',
+            'code' => 'KLT-DEL-01',
+            'target_per_pax' => 30000000.0,
+            'monthly_per_pax' => 1500000.0,
+            'start_date' => Carbon::now()->startOfMonth(),
+            'end_date' => Carbon::now()->addMonths(10)->endOfMonth(),
+            'status' => 'active',
+        ]);
+
+        $reg = KloterRegistration::create([
+            'kloter_id' => $kloter->id,
+            'user_id' => $targetJamaah->id,
+            'total_pax' => 1,
+            'status' => 'active',
+        ]);
+
+        $regPax = RegistrationPax::create([
+            'registration_id' => $reg->id,
+            'family_member_id' => $familyMember->id,
+            'status' => 'active',
+        ]);
+
+        $invoice = Invoice::create([
+            'registration_id' => $reg->id,
+            'invoice_number' => 'INV-DEL-001',
+            'billing_year' => 2026,
+            'billing_month' => 4,
+            'billing_date' => Carbon::create(2026, 4, 1),
+            'due_date' => Carbon::create(2026, 4, 10),
+            'total_amount' => 1500000.0,
+            'paid_amount' => 1500000.0,
+            'status' => Invoice::STATUS_PAID,
+        ]);
+
+        $bank = BankAccount::create([
+            'bank_name' => 'BSI Bank',
+            'account_number' => '9998887776',
+            'account_holder' => 'Yayasan Haramain',
+            'is_active' => true,
+        ]);
+
+        // Simpan file bukti transfer palsu di storage
+        $dummyFile = UploadedFile::fake()->image('bukti_hapus.jpg');
+        $storedPath = $dummyFile->store('payment-proofs/2026/10', 'public');
+        Storage::disk('public')->assertExists($storedPath);
+
+        $payment = Payment::create([
+            'invoice_id' => $invoice->id,
+            'user_id' => $targetJamaah->id,
+            'bank_account_id' => $bank->id,
+            'amount' => 1500000.0,
+            'payment_date' => Carbon::now()->toDateString(),
+            'proof_path' => $storedPath,
+            'status' => Payment::STATUS_APPROVED,
+        ]);
+
+        // 1. Jamaah biasa tidak boleh menghapus akun
+        $forbiddenResponse = $this->actingAs($otherJamaah)->delete(route('admin.users.destroy', $targetJamaah));
+        $forbiddenResponse->assertStatus(403);
+
+        // 2. Superadmin dilarang menghapus akunnya sendiri
+        $selfDeleteResponse = $this->actingAs($superadmin)->delete(route('admin.users.destroy', $superadmin));
+        $selfDeleteResponse->assertRedirect();
+        $selfDeleteResponse->assertSessionHas('error');
+        $this->assertDatabaseHas('users', ['id' => $superadmin->id]);
+
+        // 3. Superadmin berhasil menghapus target jamaah
+        $deleteResponse = $this->actingAs($superadmin)->delete(route('admin.users.destroy', $targetJamaah));
+        $deleteResponse->assertRedirect(route('admin.users.jamaah'));
+        $deleteResponse->assertSessionHas('success');
+
+        // 4. Verifikasi bahwa User dan seluruh data turunannya (keluarga, registrasi kloter, invoice, item, payment) telah bersih terhapus
+        $this->assertDatabaseMissing('users', ['id' => $targetJamaah->id]);
+        $this->assertDatabaseMissing('family_members', ['id' => $familyMember->id]);
+        $this->assertDatabaseMissing('kloter_registrations', ['id' => $reg->id]);
+        $this->assertDatabaseMissing('registration_paxes', ['id' => $regPax->id]);
+        $this->assertDatabaseMissing('invoices', ['id' => $invoice->id]);
+        $this->assertDatabaseMissing('payments', ['id' => $payment->id]);
+
+        // 5. Verifikasi berkas fisik bukti transfer telah dibersihkan dari disk storage
+        Storage::disk('public')->assertMissing($storedPath);
+    }
 }
+
 
 
 
