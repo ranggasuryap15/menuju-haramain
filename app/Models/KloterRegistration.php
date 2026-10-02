@@ -2,15 +2,16 @@
 
 /**
  * File: app/Models/KloterRegistration.php
- * Tujuan: Model pendaftaran akun user ke kloter tertentu beserta status approval, rekapitulasi capaian tabungan, dan deteksi pendaftaran susulan (late joiner)
+ * Tujuan: Model pendaftaran akun user ke kloter tertentu beserta status approval, tanggal mulai penagihan (start_billing_date), rekapitulasi capaian tabungan, dan deteksi pendaftaran susulan (late joiner)
  * Dipakai Oleh: RegistrationController, RegistrationApprovalController, JamaahDashboardController, BillingService
- * Dependensi Utama: Illuminate\Database\Eloquent\Model, Kloter, User, RegistrationPax, Invoice, Payment
- * Daftar Fungsi Utama: kloter(), user(), approver(), paxes(), invoices(), payments(), isLateJoiner(), getMissedInitialMonthsCount(), getMissedInitialAmount(), getRemainingUnbilledAmount()
+ * Dependensi Utama: Illuminate\Database\Eloquent\Model, Kloter, User, RegistrationPax, Invoice, Payment, Carbon\Carbon
+ * Daftar Fungsi Utama: kloter(), user(), approver(), paxes(), invoices(), payments(), getEffectiveStartBillingDate(), isLateJoiner(), getMissedInitialMonthsCount(), getMissedInitialAmount(), getRemainingUnbilledAmount()
  * Side Effect: Query DB tabel kloter_registrations dan agregasi pembayaran
  */
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -30,6 +31,7 @@ class KloterRegistration extends Model
         'user_id',
         'total_pax',
         'status',
+        'start_billing_date',
         'approved_by',
         'approved_at',
         'admin_notes',
@@ -38,6 +40,7 @@ class KloterRegistration extends Model
     protected function casts(): array
     {
         return [
+            'start_billing_date' => 'date',
             'approved_at' => 'datetime',
         ];
     }
@@ -130,6 +133,24 @@ class KloterRegistration extends Model
     }
 
     /**
+     * Mendapatkan bulan awal efektif penagihan untuk pendaftaran ini.
+     * Jika start_billing_date diisi secara eksplisit, gunakan tanggal tersebut.
+     * Jika tidak diisi (null), secara default penagihan dimulai sejak awal periode kloter.
+     */
+    public function getEffectiveStartBillingDate(): Carbon
+    {
+        if ($this->start_billing_date) {
+            return Carbon::parse($this->start_billing_date)->startOfMonth();
+        }
+
+        if ($this->kloter && $this->kloter->start_date) {
+            return $this->kloter->start_date->copy()->startOfMonth();
+        }
+
+        return ($this->approved_at ?: $this->created_at)->copy()->startOfMonth();
+    }
+
+    /**
      * Memeriksa apakah pendaftaran bergabung susulan (setelah bulan pertama kloter berjalan)
      */
     public function isLateJoiner(): bool
@@ -137,9 +158,8 @@ class KloterRegistration extends Model
         if (!$this->kloter || !$this->kloter->start_date) {
             return false;
         }
-        $joinDate = ($this->approved_at ?: $this->created_at)->copy()->startOfMonth();
         $kloterStartDate = $this->kloter->start_date->copy()->startOfMonth();
-        return $joinDate->greaterThan($kloterStartDate);
+        return $this->getEffectiveStartBillingDate()->greaterThan($kloterStartDate);
     }
 
     /**
@@ -150,7 +170,7 @@ class KloterRegistration extends Model
         if (!$this->isLateJoiner()) {
             return 0;
         }
-        $joinDate = ($this->approved_at ?: $this->created_at)->copy()->startOfMonth();
+        $joinDate = $this->getEffectiveStartBillingDate();
         $kloterStartDate = $this->kloter->start_date->copy()->startOfMonth();
         return max(0, (int) round($kloterStartDate->diffInMonths($joinDate)));
     }

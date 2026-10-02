@@ -1,10 +1,10 @@
 <?php
 /**
  * File: app/Services/BillingService.php
- * Tujuan: Layanan terpusat untuk pembuatan tagihan bulanan otomatis (serentak maupun per-kloter spesifik), penanganan pendaftaran susulan (late joiner), pelunasan sisa target di bulan akhir, dan rekonsiliasi status invoice dengan alokasi FIFO waterfall
+ * Tujuan: Layanan terpusat untuk pembuatan tagihan bulanan otomatis (serentak, kloter spesifik, maupun catch-up semua periode tertunggak), penanganan pendaftaran susulan (late joiner), pelunasan sisa target di bulan akhir, dan rekonsiliasi status invoice dengan alokasi FIFO waterfall
  * Dipakai Oleh: GenerateMonthlyBillingCommand, Admin\KloterController, PaymentService, Jamaah\InvoiceController
  * Dependensi Utama: App\Models\Invoice, App\Models\InvoiceItem, App\Models\Kloter, App\Models\KloterRegistration, App\Models\Payment, DB
- * Daftar Fungsi Utama: generateMonthlyInvoices(), generateKloterInvoices(), recalculateInvoiceStatus(), recalculateRegistrationInvoices(), generateInvoiceNumber()
+ * Daftar Fungsi Utama: generateMonthlyInvoices(), generateKloterInvoices(), generateKloterAllPendingInvoices(), recalculateInvoiceStatus(), recalculateRegistrationInvoices(), generateInvoiceNumber()
  * Side Effect: Write DB tabel invoices & invoice_items, update paid_amount & status secara transaksional
  */
 
@@ -27,6 +27,40 @@ class BillingService
     public function generateKloterInvoices(Kloter $kloter, ?Carbon $billingDate = null): array
     {
         return $this->generateMonthlyInvoices($billingDate, $kloter);
+    }
+
+    /**
+     * Menerbitkan sekaligus tagihan bulanan kloter dari awal kloter hingga periode tertentu yang belum terbit
+     */
+    public function generateKloterAllPendingInvoices(Kloter $kloter, ?Carbon $upToDate = null): array
+    {
+        $current = $kloter->start_date->copy()->startOfMonth();
+        $targetLimit = ($upToDate ?: Carbon::now())->copy()->startOfMonth();
+        $kloterEnd = $kloter->end_date->copy()->startOfMonth();
+
+        if ($targetLimit->greaterThan($kloterEnd)) {
+            $targetLimit = $kloterEnd;
+        }
+
+        $totalCreated = 0;
+        $totalSkipped = 0;
+        $monthsCount = 0;
+
+        while ($current->lessThanOrEqualTo($targetLimit)) {
+            $res = $this->generateKloterInvoices($kloter, $current);
+            $totalCreated += $res['created'];
+            $totalSkipped += $res['skipped'];
+            $monthsCount++;
+            $current->addMonth();
+        }
+
+        return [
+            'created' => $totalCreated,
+            'skipped' => $totalSkipped,
+            'months' => $monthsCount,
+            'start_period' => $kloter->start_date->copy()->startOfMonth()->locale('id')->translatedFormat('F Y'),
+            'end_period' => $targetLimit->locale('id')->translatedFormat('F Y'),
+        ];
     }
 
     /**
@@ -74,8 +108,8 @@ class BillingService
                         continue;
                     }
 
-                    // Jamaah susulan: lewati jika tagihan ditujukan untuk periode sebelum pendaftaran/approval peserta
-                    $effectiveJoinMonth = ($reg->approved_at ?: $reg->created_at)->copy()->startOfMonth();
+                    // Jamaah susulan: lewati jika tagihan ditujukan untuk periode sebelum bulan awal penagihan efektif peserta
+                    $effectiveJoinMonth = $reg->getEffectiveStartBillingDate();
                     if ($billingDate->lt($effectiveJoinMonth)) {
                         $stats['skipped']++;
                         continue;

@@ -183,12 +183,27 @@ class KloterController extends Controller
     }
 
     /**
-     * Trigger manual untuk menerbitkan tagihan khusus pada kloter ini
+     * Trigger manual untuk menerbitkan tagihan khusus pada kloter ini (bisa 1 bulan tertentu atau seluruh periode tertunggak sejak awal kloter)
      */
     public function triggerKloterBilling(Request $request, Kloter $kloter, BillingService $billingService): RedirectResponse
     {
         $dateParam = $request->input('billing_date');
         $billingDate = $dateParam ? Carbon::parse($dateParam)->startOfMonth() : Carbon::now()->startOfMonth();
+        $generateAllPending = $request->boolean('generate_all_pending');
+
+        if ($generateAllPending) {
+            $stats = $billingService->generateKloterAllPendingInvoices($kloter, $billingDate);
+
+            return back()->with('success', sprintf(
+                'Generate tagihan kloter "%s" dari periode %s s/d %s selesai (%d bulan). Dibuat: %d invoice baru, Dilewati/Sudah Ada: %d.',
+                $kloter->name,
+                $stats['start_period'],
+                $stats['end_period'],
+                $stats['months'],
+                $stats['created'],
+                $stats['skipped']
+            ));
+        }
 
         $stats = $billingService->generateKloterInvoices($kloter, $billingDate);
 

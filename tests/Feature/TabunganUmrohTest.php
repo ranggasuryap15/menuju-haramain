@@ -1712,6 +1712,7 @@ class TabunganUmrohTest extends TestCase
             'user_id' => $userB->id,
             'kloter_id' => $kloter->id,
             'status' => 'active',
+            'start_billing_date' => Carbon::create(2026, 8, 1),
             'created_at' => Carbon::create(2026, 8, 10, 9, 0, 0),
             'approved_at' => Carbon::create(2026, 8, 10, 14, 0, 0),
         ]);
@@ -2066,6 +2067,99 @@ class TabunganUmrohTest extends TestCase
         $this->assertStringContainsString('Sesi Halaman Telah Berakhir', $response->getContent());
         $this->assertStringContainsString('Muat Ulang Halaman (Refresh)', $response->getContent());
         $this->assertStringContainsString('Masuk Kembali (Login)', $response->getContent());
+    }
+
+    /**
+     * Uji penerbitan tagihan retroaktif periode lama (sejak awal kloter) dan fitur catch-up tagihan:
+     * - Kloter dibuka April 2026, akun baru diinput ke sistem pada Oktober 2026.
+     * - Tagihan periode lama (April 2026) tetap bisa diterbitkan dan tidak dilewati.
+     * - Fitur generate_all_pending menerbitkan seluruh periode tertunggak (April s/d Oktober) secara idempoten.
+     * - Halaman tagihan jamaah (/jamaah/invoices) menampilkan seluruh invoice yang telah diterbitkan.
+     */
+    public function test_retroactive_billing_and_catchup_generation_for_older_periods()
+    {
+        // 1. Setup Admin dan Kloter yang dimulai April 2026
+        $admin = User::factory()->create(['role' => 'superadmin']);
+        $kloter = Kloter::create([
+            'name' => 'Kloter Perdana Tambun',
+            'code' => 'KLR-TAMBUN',
+            'target_per_pax' => 35000000.0,
+            'monthly_per_pax' => 1500000.0,
+            'start_date' => Carbon::create(2026, 4, 1),
+            'end_date' => Carbon::create(2028, 2, 28),
+            'status' => 'active',
+        ]);
+
+        // 2. Setup Jamaah yang baru dibuat dan didaftarkan di sistem pada Oktober 2026
+        $jamaah = User::factory()->create(['role' => 'jamaah', 'name' => 'Keluarga Ahmad']);
+        $pax = FamilyMember::create([
+            'user_id' => $jamaah->id,
+            'full_name' => 'Ahmad Suhada',
+            'relationship' => 'Diri Sendiri',
+        ]);
+        $registration = KloterRegistration::create([
+            'kloter_id' => $kloter->id,
+            'user_id' => $jamaah->id,
+            'total_pax' => 1,
+            'status' => 'active',
+            'start_billing_date' => null, // default ikut awal kloter
+            'created_at' => Carbon::create(2026, 10, 2, 10, 0, 0),
+            'approved_at' => Carbon::create(2026, 10, 2, 11, 0, 0),
+        ]);
+        RegistrationPax::create([
+            'registration_id' => $registration->id,
+            'family_member_id' => $pax->id,
+            'status' => 'active',
+        ]);
+
+        // Verifikasi model: bukan late joiner karena ikut dari awal kloter
+        $this->assertFalse($registration->isLateJoiner());
+        $this->assertEquals(Carbon::create(2026, 4, 1)->startOfMonth(), $registration->getEffectiveStartBillingDate());
+
+        // 3. Admin generate tagihan khusus periode lama: April 2026
+        $response = $this->actingAs($admin)->post(route('admin.kloters.trigger-kloter-billing', $kloter), [
+            'billing_date' => '2026-04',
+        ]);
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        // Tagihan April 2026 harus berhasil dibuat!
+        $this->assertEquals(1, Invoice::where('registration_id', $registration->id)->count());
+        $aprilInvoice = Invoice::where('registration_id', $registration->id)->first();
+        $this->assertEquals(2026, $aprilInvoice->billing_year);
+        $this->assertEquals(4, $aprilInvoice->billing_month);
+        $this->assertEquals(1500000.0, (float) $aprilInvoice->total_amount);
+
+        // 4. Jamaah membuka halaman tagihan (/jamaah/invoices) dan melihat tagihan April 2026
+        $jamaahResponse = $this->actingAs($jamaah)->get(route('jamaah.invoices.index'));
+        $jamaahResponse->assertStatus(200);
+        $jamaahResponse->assertSee($aprilInvoice->invoice_number);
+        $jamaahResponse->assertSee('Periode April 2026');
+
+        // 5. Admin menjalankan catch-up: terbitkan seluruh periode tertunggak s/d Oktober 2026
+        $catchupResponse = $this->actingAs($admin)->post(route('admin.kloters.trigger-kloter-billing', $kloter), [
+            'billing_date' => '2026-10',
+            'generate_all_pending' => '1',
+        ]);
+        $catchupResponse->assertRedirect();
+        $catchupResponse->assertSessionHas('success');
+
+        // Total harus ada 7 invoice (April, Mei, Juni, Juli, Agustus, September, Oktober)
+        $invoices = Invoice::where('registration_id', $registration->id)
+            ->orderBy('billing_year')
+            ->orderBy('billing_month')
+            ->get();
+
+        $this->assertCount(7, $invoices);
+        $months = $invoices->pluck('billing_month')->toArray();
+        $this->assertEquals([4, 5, 6, 7, 8, 9, 10], $months);
+
+        // 6. Jalankan sekali lagi catchup untuk menguji idempotensi (tidak ada invoice ganda)
+        $this->actingAs($admin)->post(route('admin.kloters.trigger-kloter-billing', $kloter), [
+            'billing_date' => '2026-10',
+            'generate_all_pending' => '1',
+        ]);
+        $this->assertEquals(7, Invoice::where('registration_id', $registration->id)->count());
     }
 }
 

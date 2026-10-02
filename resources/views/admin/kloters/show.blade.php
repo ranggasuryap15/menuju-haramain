@@ -1,10 +1,10 @@
 {{--
 /**
  * File: resources/views/admin/kloters/show.blade.php
- * Tujuan: Menampilkan rincian detail master kloter umroh, panel pemicu penagihan khusus kloter ini, agregat keuangan, daftar rekening bank penampung kloter, tombol navigasi edit kloter, dan daftar pendaftar keluarga beserta anggota pax
+ * Tujuan: Menampilkan rincian detail master kloter umroh, panel pemicu penagihan khusus kloter ini (per bulan atau sekaligus sejak awal kloter), agregat keuangan, daftar rekening bank penampung kloter, tombol navigasi edit kloter, dan daftar pendaftar keluarga beserta anggota pax & status awal penagihan
  * Dipakai Oleh: App\Http\Controllers\Admin\KloterController@show
  * Dependensi Utama: Tailwind CSS CDN, Alpine.js, App\Models\Kloter, App\Models\BankAccount
- * Daftar Komponen Utama: Breadcrumb, Tombol aksi edit & tombol generate tagihan kloter, Panel penagihan kloter terpisah, Metrik keuangan & agregasi pax kloter, informasi paket, kartu rekening bank tujuan kloter, tabel pendaftar keluarga, modal generate tagihan kloter
+ * Daftar Komponen Utama: Breadcrumb, Tombol aksi edit & tombol generate tagihan kloter, Panel penagihan kloter terpisah, Metrik keuangan & agregasi pax kloter, informasi paket, kartu rekening bank tujuan kloter, tabel pendaftar keluarga dengan status awal tagihan, modal generate tagihan kloter per bulan / catch-up all pending
  * Side Effect: Tampilan detail kloter, POST form ke admin.kloters.trigger-kloter-billing untuk penerbitan invoice per-kloter
  */
 --}}
@@ -236,6 +236,17 @@
                                 <div class="font-bold text-gray-900">{{ $registration->user->name }}</div>
                                 <div class="text-xs text-gray-500">{{ $registration->user->email }} • {{ $registration->user->phone ?? '-' }}</div>
                                 <div class="text-[11px] text-gray-400 mt-0.5">Daftar: {{ $registration->created_at->isoFormat('D MMM Y') }}</div>
+                                @if($registration->isLateJoiner())
+                                    <div class="mt-1">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                            Susulan: Mulai {{ $registration->getEffectiveStartBillingDate()->locale('id')->translatedFormat('F Y') }}
+                                        </span>
+                                    </div>
+                                @else
+                                    <div class="text-[10px] text-emerald-700 font-medium mt-0.5">
+                                        Tagihan dari awal kloter ({{ $kloter->start_date->locale('id')->translatedFormat('M Y') }})
+                                    </div>
+                                @endif
                             </td>
                             <td class="px-6 py-4">
                                 <div class="flex flex-wrap gap-1.5 max-w-xs">
@@ -301,6 +312,18 @@
                                 <label class="block text-xs font-semibold text-gray-700 mb-1">Periode Penagihan (Bulan / Tahun)</label>
                                 <input type="month" name="billing_date" value="{{ date('Y-m') }}" class="w-full px-4 py-2.5 sm:py-3 text-sm rounded-xl border border-slate-300 shadow-sm focus:border-[#346733] focus:ring-2 focus:ring-[#346733] outline-none" required>
                                 <p class="text-[11px] text-gray-400 mt-1">Sistem idempoten: Tagihan yang sudah terbit pada bulan ini untuk kloter ini tidak akan terduplikasi.</p>
+                            </div>
+
+                            <div class="pt-2 border-t border-slate-100">
+                                <label class="flex items-start gap-2.5 cursor-pointer select-none">
+                                    <input type="checkbox" name="generate_all_pending" value="1" class="mt-0.5 w-4 h-4 rounded text-[#346733] border-slate-300 focus:ring-[#346733]">
+                                    <div class="text-xs">
+                                        <span class="font-bold text-gray-800">Terbitkan Sekaligus Seluruh Periode Tertunggak</span>
+                                        <p class="text-[11px] text-gray-500 mt-0.5">
+                                            Generate bertahap dari awal kloter ({{ $kloter->start_date->locale('id')->translatedFormat('F Y') }}) sampai periode yang dipilih di atas untuk seluruh bulan yang belum pernah diterbitkan tagihannya.
+                                        </p>
+                                    </div>
+                                </label>
                             </div>
 
                             <div class="p-3 bg-emerald-50 rounded-xl text-xs text-emerald-900 border border-emerald-200 space-y-1">
