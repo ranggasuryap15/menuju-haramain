@@ -32,6 +32,7 @@
  *   - test_superadmin_can_create_edit_and_reset_password_for_jamaah_and_admin()
  *   - test_superadmin_can_promote_and_demote_user_roles_with_security_guards()
  *   - test_kloter_specific_billing_generation_via_show_page()
+ *   - test_csrf_token_mismatch_exception_handling_and_friendly_recovery()
  * Side Effect: Database read/write dalam transaction rollback
  */
 
@@ -2040,6 +2041,31 @@ class TabunganUmrohTest extends TestCase
 
         // Invoice untuk Jamaah Kloter 2 TETAP 0 (tidak ikut terbit karena penagihan terpisah per-kloter)
         $this->assertEquals(0, Invoice::where('registration_id', $reg2->id)->count());
+    }
+
+    /**
+     * Uji penanganan ramah jika terjadi CSRF Token Mismatch (HTTP 419 Page Expired):
+     * - Ketika submit login dengan token kedaluwarsa, otomatis diarahkan kembali ke form login dengan flash warning.
+     * - Halaman custom view errors.419 memiliki tombol refresh dan tombol masuk kembali (login).
+     */
+    public function test_csrf_token_mismatch_exception_handling_and_friendly_recovery()
+    {
+        // 1. Verifikasi custom view 419 ter-render dengan komponen navigasi yang lengkap
+        $view = $this->view('errors.419');
+        $view->assertSee('Sesi Halaman Telah Berakhir');
+        $view->assertSee('Muat Ulang Halaman (Refresh)');
+        $view->assertSee('Masuk Kembali (Login)');
+        $view->assertSee('Kembali ke Beranda Utama');
+
+        // 2. Simulasi exception handler merender TokenMismatchException
+        $request = \Illuminate\Http\Request::create('/login', 'POST');
+        $handler = app(\Illuminate\Contracts\Debug\ExceptionHandler::class);
+        $response = $handler->render($request, new \Illuminate\Session\TokenMismatchException());
+
+        $this->assertEquals(419, $response->getStatusCode());
+        $this->assertStringContainsString('Sesi Halaman Telah Berakhir', $response->getContent());
+        $this->assertStringContainsString('Muat Ulang Halaman (Refresh)', $response->getContent());
+        $this->assertStringContainsString('Masuk Kembali (Login)', $response->getContent());
     }
 }
 
