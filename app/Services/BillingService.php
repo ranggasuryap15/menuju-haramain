@@ -1,10 +1,10 @@
 <?php
 /**
  * File: app/Services/BillingService.php
- * Tujuan: Layanan terpusat untuk pembuatan tagihan bulanan otomatis, penanganan pendaftaran susulan (late joiner), pelunasan sisa target di bulan akhir, dan rekonsiliasi status invoice dengan alokasi FIFO waterfall
- * Dipakai Oleh: GenerateMonthlyBillingCommand, AdminInvoiceController, PaymentService, Jamaah\InvoiceController
- * Dependensi Utama: App\Models\Invoice, App\Models\InvoiceItem, App\Models\KloterRegistration, App\Models\Payment, DB
- * Daftar Fungsi Utama: generateMonthlyInvoices(), recalculateInvoiceStatus(), recalculateRegistrationInvoices(), generateInvoiceNumber()
+ * Tujuan: Layanan terpusat untuk pembuatan tagihan bulanan otomatis (serentak maupun per-kloter spesifik), penanganan pendaftaran susulan (late joiner), pelunasan sisa target di bulan akhir, dan rekonsiliasi status invoice dengan alokasi FIFO waterfall
+ * Dipakai Oleh: GenerateMonthlyBillingCommand, Admin\KloterController, PaymentService, Jamaah\InvoiceController
+ * Dependensi Utama: App\Models\Invoice, App\Models\InvoiceItem, App\Models\Kloter, App\Models\KloterRegistration, App\Models\Payment, DB
+ * Daftar Fungsi Utama: generateMonthlyInvoices(), generateKloterInvoices(), recalculateInvoiceStatus(), recalculateRegistrationInvoices(), generateInvoiceNumber()
  * Side Effect: Write DB tabel invoices & invoice_items, update paid_amount & status secara transaksional
  */
 
@@ -12,6 +12,7 @@ namespace App\Services;
 
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\Kloter;
 use App\Models\KloterRegistration;
 use App\Models\Payment;
 use Carbon\Carbon;
@@ -21,12 +22,20 @@ use Illuminate\Support\Str;
 class BillingService
 {
     /**
-     * Menerbitkan tagihan bulanan otomatis tanggal 1 untuk seluruh pendaftaran kloter yang aktif.
+     * Menerbitkan tagihan bulanan khusus untuk kloter tertentu
+     */
+    public function generateKloterInvoices(Kloter $kloter, ?Carbon $billingDate = null): array
+    {
+        return $this->generateMonthlyInvoices($billingDate, $kloter);
+    }
+
+    /**
+     * Menerbitkan tagihan bulanan tanggal 1 untuk seluruh pendaftaran kloter aktif atau kloter spesifik.
      * Jamaah susulan (late joiner) hanya ditagih sejak bulan bergabung, dan kekurangan bulan awal
      * ditagihkan sekaligus sebagai pelunasan di bulan akhir kloter sebelum keberangkatan.
      * Menggunakan DB chunking dan eager loading untuk efisiensi memory & I/O.
      */
-    public function generateMonthlyInvoices(?Carbon $billingDate = null): array
+    public function generateMonthlyInvoices(?Carbon $billingDate = null, ?Kloter $targetKloter = null): array
     {
         $billingDate = $billingDate ?: Carbon::now()->startOfMonth();
         $year = (int) $billingDate->year;
@@ -39,15 +48,23 @@ class BillingService
         ];
 
         // Eager load kloter & paxes aktif untuk mencegah N+1 query
-        KloterRegistration::query()
+        $query = KloterRegistration::query()
             ->with(['kloter', 'paxes' => fn ($q) => $q->where('status', 'active')->with('familyMember')])
-            ->where('status', 'active')
-            ->whereHas('kloter', function ($q) use ($billingDate) {
-                $q->where('status', 'active')
-                    ->whereDate('start_date', '<=', $billingDate)
-                    ->whereDate('end_date', '>=', $billingDate);
-            })
-            ->chunkById(100, function ($registrations) use ($year, $month, $billingDate, $dueDate, &$stats) {
+            ->where('status', 'active');
+
+        if ($targetKloter) {
+            $query->where('kloter_id', $targetKloter->id);
+        }
+
+        $query->whereHas('kloter', function ($q) use ($billingDate, $targetKloter) {
+            if ($targetKloter) {
+                $q->where('id', $targetKloter->id);
+            }
+            $q->where('status', 'active')
+                ->whereDate('start_date', '<=', $billingDate)
+                ->whereDate('end_date', '>=', $billingDate);
+        })
+        ->chunkById(100, function ($registrations) use ($year, $month, $billingDate, $dueDate, &$stats) {
                 foreach ($registrations as $reg) {
                     $paxes = $reg->paxes;
                     $paxCount = $paxes->count();

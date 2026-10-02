@@ -1,11 +1,11 @@
 {{--
 /**
  * File: resources/views/admin/kloters/index.blade.php
- * Tujuan: Halaman kelola master kloter tabungan umroh (daftar, tombol edit, buat baru) dan pemicu manual penagihan bulanan tanggal 1
+ * Tujuan: Halaman kelola master kloter tabungan umroh (daftar kloter, tombol edit, pembuatan kloter baru, dan status)
  * Dipakai Oleh: App\Http\Controllers\Admin\KloterController@index
  * Dependensi Utama: Tailwind CSS CDN, Alpine.js, App\Models\Kloter
- * Daftar Komponen Utama: Kartu ringkasan kloter, tombol edit & detail kloter, tombol buat kloter, panel pemicu billing tanggal 1, tabel daftar kloter & status
- * Side Effect: POST form ke admin.kloters.trigger-billing untuk penerbitan invoice serentak
+ * Daftar Komponen Utama: Kartu ringkasan kloter, tombol edit & detail kloter, tombol buat kloter, grid daftar kloter & metrik
+ * Side Effect: Navigasi ke detail kloter, edit kloter, dan form create kloter
  */
 --}}
 @extends('layouts.app')
@@ -13,40 +13,20 @@
 @section('title', 'Manajemen Kloter Umroh')
 
 @section('content')
-<div class="space-y-6" x-data="{ showTriggerModal: false }">
+<div class="space-y-6">
     <!-- Header Page & Action Buttons -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
             <h1 class="text-2xl font-bold text-gray-900 tracking-tight">Manajemen Kloter Umroh</h1>
-            <p class="text-sm text-gray-500 mt-1">Atur paket keberangkatan, periode tabungan, dan penerbitan tagihan bulanan.</p>
+            <p class="text-sm text-gray-500 mt-1">Atur paket keberangkatan, periode tabungan, dan detail masing-masing kloter.</p>
         </div>
 
         <div class="flex items-center gap-3">
-            <button type="button" @click="showTriggerModal = true" class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 shadow-sm transition">
-                <svg class="w-4 h-4 text-haramain-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                Generate Tagihan (Tgl 1)
-            </button>
             <a href="{{ route('admin.kloters.create') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white shadow-md transition bg-[#346733] hover:bg-[#234622]">
                 <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                 Tambah Kloter Baru
             </a>
         </div>
-    </div>
-
-    <!-- Banner Info Sistem Penagihan Otomatis -->
-    <div class="bg-gradient-to-r from-haramain-green to-haramain-teal rounded-2xl p-5 text-white shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div class="flex items-center gap-4">
-            <div class="p-3 bg-white/10 rounded-xl">
-                <svg class="w-8 h-8 text-haramain-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-            </div>
-            <div>
-                <h3 class="font-bold text-base">Otomasi Penagihan Tanggal 1</h3>
-                <p class="text-xs text-white/80 mt-0.5">Sistem scheduler artisan `billing:generate-monthly` berjalan otomatis setiap tanggal 1 jam 00:01 WIB untuk seluruh kloter aktif.</p>
-            </div>
-        </div>
-        <button type="button" @click="showTriggerModal = true" class="px-3.5 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-xs font-semibold backdrop-blur transition whitespace-nowrap">
-            Jalankan Manual Sekarang
-        </button>
     </div>
 
     <!-- Daftar Kloter -->
@@ -133,51 +113,6 @@
                 </a>
             </div>
         @endforelse
-    </div>
-
-    <!-- Modal Trigger Penagihan Manual -->
-    <div x-show="showTriggerModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
-        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
-            <div x-show="showTriggerModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showTriggerModal = false"></div>
-
-            <div x-show="showTriggerModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
-                <form action="{{ route('admin.kloters.trigger-billing') }}" method="POST">
-                    @csrf
-                    <div class="p-6">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-haramain-green">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                            </div>
-                            <div>
-                                <h3 class="font-bold text-gray-900 text-base">Generate Tagihan Tanggal 1</h3>
-                                <p class="text-xs text-gray-500">Penerbitan invoice serentak untuk semua peserta kloter aktif</p>
-                            </div>
-                        </div>
-
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-700 mb-1">Periode Penagihan (Bulan / Tahun)</label>
-                                <input type="month" name="billing_date" value="{{ date('Y-m') }}" class="w-full px-4 py-2.5 sm:py-3 text-sm rounded-xl border border-slate-300 shadow-sm focus:border-haramain-green focus:ring-2 focus:ring-haramain-green outline-none" required>
-                                <p class="text-[11px] text-gray-400 mt-1">Sistem idempoten: Tagihan yang sudah terbit di bulan ini tidak akan terduplikasi.</p>
-                            </div>
-
-                            <div class="p-3 bg-amber-50 rounded-xl text-xs text-amber-800 border border-amber-200">
-                                <strong>Catatan:</strong> Tagihan hanya diterbitkan bagi pendaftaran kloter dengan status <em>active</em> dan berada di dalam rentang tanggal periode kloter.
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-gray-50 px-6 py-3 flex justify-end gap-2">
-                        <button type="button" @click="showTriggerModal = false" class="px-4 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50">
-                            Batal
-                        </button>
-                        <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold text-white bg-[#346733] hover:bg-[#234622] shadow cursor-pointer">
-                            Jalankan Generate Sekarang
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
     </div>
 </div>
 @endsection

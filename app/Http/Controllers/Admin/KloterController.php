@@ -1,10 +1,10 @@
 <?php
 /**
  * File: app/Http/Controllers/Admin/KloterController.php
- * Tujuan: Manajemen master kloter tabungan umroh (pembuatan kloter, pengubahan detail kloter, normalisasi kode kloter selalu UPPERCASE, asosiasi multi-rekening bank per kloter, rentang periode, tarif per pax, detail peserta kloter, rekapitulasi dana terkumpul riil, trigger billing)
- * Dipakai Oleh: routes/web.php (/admin/kloters, /admin/kloters/create, /admin/kloters/{kloter}, /admin/kloters/{kloter}/edit, /admin/kloters/trigger-billing)
+ * Tujuan: Manajemen master kloter tabungan umroh (pembuatan kloter, pengubahan detail kloter, normalisasi kode kloter selalu UPPERCASE, asosiasi multi-rekening bank per kloter, rentang periode, tarif per pax, detail peserta kloter, rekapitulasi dana terkumpul riil, dan penagihan spesifik per-kloter)
+ * Dipakai Oleh: routes/web.php (/admin/kloters, /admin/kloters/create, /admin/kloters/{kloter}, /admin/kloters/{kloter}/edit, /admin/kloters/{kloter}/trigger-billing)
  * Dependensi Utama: App\Models\Kloter, App\Models\BankAccount, App\Models\Payment, App\Services\BillingService, Request, Illuminate\Validation\Rule
- * Daftar Fungsi Utama: index(), create(), store(), show(), edit(), update(), triggerBilling()
+ * Daftar Fungsi Utama: index(), create(), store(), show(), edit(), update(), triggerBilling(), triggerKloterBilling()
  * Side Effect: Write DB tabel kloters (insert/update uppercase code), pivot kloter_bank_account (sync), eksekusi pembuatan tagihan bulanan
  */
 
@@ -165,7 +165,7 @@ class KloterController extends Controller
     }
 
     /**
-     * Trigger manual untuk menerbitkan tagihan bulan ini
+     * Trigger manual untuk menerbitkan tagihan bulan ini serentak
      */
     public function triggerBilling(Request $request, BillingService $billingService): RedirectResponse
     {
@@ -176,6 +176,25 @@ class KloterController extends Controller
 
         return back()->with('success', sprintf(
             'Generate tagihan periode %s selesai. Dibuat: %d, Dilewati/Sudah Ada: %d.',
+            $billingDate->locale('id')->translatedFormat('F Y'),
+            $stats['created'],
+            $stats['skipped']
+        ));
+    }
+
+    /**
+     * Trigger manual untuk menerbitkan tagihan khusus pada kloter ini
+     */
+    public function triggerKloterBilling(Request $request, Kloter $kloter, BillingService $billingService): RedirectResponse
+    {
+        $dateParam = $request->input('billing_date');
+        $billingDate = $dateParam ? Carbon::parse($dateParam)->startOfMonth() : Carbon::now()->startOfMonth();
+
+        $stats = $billingService->generateKloterInvoices($kloter, $billingDate);
+
+        return back()->with('success', sprintf(
+            'Generate tagihan kloter "%s" periode %s selesai. Dibuat: %d invoice, Dilewati/Sudah Ada: %d.',
+            $kloter->name,
             $billingDate->locale('id')->translatedFormat('F Y'),
             $stats['created'],
             $stats['skipped']

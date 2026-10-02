@@ -97,6 +97,7 @@ Route::middleware(['auth', 'role:superadmin,admin_keuangan'])->prefix('admin')->
     Route::get('/kloters/{kloter}/edit', [KloterController::class, 'edit'])->name('kloters.edit');
     Route::put('/kloters/{kloter}', [KloterController::class, 'update'])->name('kloters.update');
     Route::post('/kloters/trigger-billing', [KloterController::class, 'triggerBilling'])->name('kloters.trigger-billing');
+    Route::post('/kloters/{kloter}/trigger-billing', [KloterController::class, 'triggerKloterBilling'])->name('kloters.trigger-kloter-billing');
 
     // Manajemen Pengguna (Khusus Superadmin: Data Jama'ah & Data Admin)
     Route::middleware(['role:superadmin'])->prefix('users')->name('users.')->group(function () {

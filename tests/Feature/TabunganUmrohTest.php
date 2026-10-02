@@ -31,6 +31,7 @@
  *   - test_superadmin_user_management_access_control()
  *   - test_superadmin_can_create_edit_and_reset_password_for_jamaah_and_admin()
  *   - test_superadmin_can_promote_and_demote_user_roles_with_security_guards()
+ *   - test_kloter_specific_billing_generation_via_show_page()
  * Side Effect: Database read/write dalam transaction rollback
  */
 
@@ -1951,6 +1952,94 @@ class TabunganUmrohTest extends TestCase
         ]);
         $changeSuperResponse->assertSessionHas('error', 'Hak akses akun Superadmin tidak dapat diubah.');
         $this->assertEquals('superadmin', $anotherSuperadmin->fresh()->role);
+    }
+
+    /**
+     * Uji fitur penagihan per-kloter:
+     * - Halaman index kloter bersih dari banner dan tombol penagihan serentak
+     * - Halaman detail kloter memiliki tombol dan panel generate tagihan kloter spesifik
+     * - Eksekusi trigger billing kloter 1 hanya menerbitkan tagihan untuk kloter 1, kloter 2 tidak terpengaruh
+     */
+    public function test_kloter_specific_billing_generation_via_show_page()
+    {
+        $superadmin = User::where('role', 'superadmin')->first()
+            ?: User::factory()->create(['role' => 'superadmin', 'email' => 'super@test.com']);
+
+        $now = Carbon::now()->startOfMonth();
+
+        // 1. Buat 2 Kloter Umroh yang Berjalan di Bulan Ini
+        $kloter1 = Kloter::create([
+            'name' => 'Kloter Madinah 1',
+            'code' => 'KLTR-MDN-01',
+            'target_per_pax' => 35000000,
+            'monthly_per_pax' => 3500000,
+            'start_date' => $now->toDateString(),
+            'end_date' => $now->copy()->addMonths(9)->endOfMonth()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        $kloter2 = Kloter::create([
+            'name' => 'Kloter Makkah 2',
+            'code' => 'KLTR-MKK-02',
+            'target_per_pax' => 40000000,
+            'monthly_per_pax' => 4000000,
+            'start_date' => $now->toDateString(),
+            'end_date' => $now->copy()->addMonths(9)->endOfMonth()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        // 2. Jamaah 1 bergabung di Kloter 1
+        $user1 = User::factory()->create(['role' => 'jamaah']);
+        $pax1 = FamilyMember::create(['user_id' => $user1->id, 'full_name' => 'Jamaah Kloter 1', 'relationship' => 'Kepala Keluarga']);
+        $reg1 = KloterRegistration::create([
+            'user_id' => $user1->id,
+            'kloter_id' => $kloter1->id,
+            'status' => 'active',
+            'created_at' => $now,
+            'approved_at' => $now,
+        ]);
+        RegistrationPax::create(['registration_id' => $reg1->id, 'family_member_id' => $pax1->id, 'status' => 'active']);
+
+        // 3. Jamaah 2 bergabung di Kloter 2
+        $user2 = User::factory()->create(['role' => 'jamaah']);
+        $pax2 = FamilyMember::create(['user_id' => $user2->id, 'full_name' => 'Jamaah Kloter 2', 'relationship' => 'Kepala Keluarga']);
+        $reg2 = KloterRegistration::create([
+            'user_id' => $user2->id,
+            'kloter_id' => $kloter2->id,
+            'status' => 'active',
+            'created_at' => $now,
+            'approved_at' => $now,
+        ]);
+        RegistrationPax::create(['registration_id' => $reg2->id, 'family_member_id' => $pax2->id, 'status' => 'active']);
+
+        // 4. Verifikasi Halaman Index Kloter: Bersih dari banner & tombol generate global
+        $indexResponse = $this->actingAs($superadmin)->get(route('admin.kloters.index'));
+        $indexResponse->assertStatus(200);
+        $indexResponse->assertDontSee('Generate Tagihan (Tgl 1)');
+        $indexResponse->assertDontSee('Otomasi Penagihan Tanggal 1');
+        $indexResponse->assertDontSee('Jalankan Manual Sekarang');
+
+        // 5. Verifikasi Halaman Detail Kloter 1: Terdapat panel & tombol penagihan khusus kloter
+        $showResponse = $this->actingAs($superadmin)->get(route('admin.kloters.show', $kloter1));
+        $showResponse->assertStatus(200);
+        $showResponse->assertSee('Generate Tagihan Kloter');
+        $showResponse->assertSee('Penagihan Bulanan Khusus: ' . $kloter1->name);
+
+        // 6. Jalankan Trigger Billing Khusus Kloter 1
+        $billingResponse = $this->actingAs($superadmin)->post(route('admin.kloters.trigger-kloter-billing', $kloter1), [
+            'billing_date' => $now->format('Y-m'),
+        ]);
+        $billingResponse->assertRedirect();
+        $billingResponse->assertSessionHas('success');
+
+        // 7. Cek Hasil:
+        // Invoice untuk Jamaah Kloter 1 terbit
+        $this->assertEquals(1, Invoice::where('registration_id', $reg1->id)->count());
+        $invoice1 = Invoice::where('registration_id', $reg1->id)->first();
+        $this->assertEquals(3500000.0, (float) $invoice1->total_amount);
+
+        // Invoice untuk Jamaah Kloter 2 TETAP 0 (tidak ikut terbit karena penagihan terpisah per-kloter)
+        $this->assertEquals(0, Invoice::where('registration_id', $reg2->id)->count());
     }
 }
 

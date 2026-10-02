@@ -1,11 +1,11 @@
 {{--
 /**
  * File: resources/views/admin/kloters/show.blade.php
- * Tujuan: Menampilkan rincian detail master kloter umroh, agregat keuangan, daftar rekening bank penampung kloter, tombol navigasi edit kloter, dan daftar pendaftar keluarga beserta anggota pax
+ * Tujuan: Menampilkan rincian detail master kloter umroh, panel pemicu penagihan khusus kloter ini, agregat keuangan, daftar rekening bank penampung kloter, tombol navigasi edit kloter, dan daftar pendaftar keluarga beserta anggota pax
  * Dipakai Oleh: App\Http\Controllers\Admin\KloterController@show
  * Dependensi Utama: Tailwind CSS CDN, Alpine.js, App\Models\Kloter, App\Models\BankAccount
- * Daftar Komponen Utama: Breadcrumb, Tombol aksi edit kloter & kembali, Metrik keuangan & agregasi pax kloter, informasi paket, kartu rekening bank tujuan kloter, tabel pendaftar keluarga, daftar rincian jiwa jamaah
- * Side Effect: Tampilan detail kloter dan navigasi ke formulir edit kloter
+ * Daftar Komponen Utama: Breadcrumb, Tombol aksi edit & tombol generate tagihan kloter, Panel penagihan kloter terpisah, Metrik keuangan & agregasi pax kloter, informasi paket, kartu rekening bank tujuan kloter, tabel pendaftar keluarga, modal generate tagihan kloter
+ * Side Effect: Tampilan detail kloter, POST form ke admin.kloters.trigger-kloter-billing untuk penerbitan invoice per-kloter
  */
 --}}
 @extends('layouts.app')
@@ -13,7 +13,7 @@
 @section('title', 'Detail Kloter - ' . $kloter->name)
 
 @section('content')
-<div class="space-y-6">
+<div class="space-y-6" x-data="{ showTriggerModal: false }">
     <!-- Breadcrumb & Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -35,6 +35,10 @@
         </div>
 
         <div class="flex items-center gap-3">
+            <button type="button" @click="showTriggerModal = true" class="inline-flex items-center gap-1.5 px-4 py-2 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 shadow-sm transition cursor-pointer">
+                <svg class="w-4 h-4 text-[#007C6A]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                <span>Generate Tagihan Kloter</span>
+            </button>
             <a href="{{ route('admin.kloters.edit', $kloter) }}" class="inline-flex items-center gap-1.5 px-4 py-2 bg-[#346733] hover:bg-[#234622] text-white rounded-xl text-sm font-semibold shadow-sm transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                 <span>Edit Kloter</span>
@@ -95,6 +99,25 @@
                 <div class="h-1.5 rounded-full bg-[#D4AF37]" style="width: {{ min(100, $fundProgress) }}%"></div>
             </div>
         </div>
+    </div>
+
+    <!-- Banner Penagihan Khusus Kloter Ini -->
+    <div class="bg-gradient-to-r from-[#346733] to-[#007C6A] rounded-2xl p-5 text-white shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+            <div class="p-3 bg-white/10 rounded-xl shrink-0">
+                <svg class="w-8 h-8 text-[#D4AF37]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            </div>
+            <div>
+                <h3 class="font-bold text-base">Penagihan Bulanan Khusus: {{ $kloter->name }}</h3>
+                <p class="text-xs text-white/80 mt-0.5">
+                    Tarif Rp {{ number_format($kloter->monthly_per_pax, 0, ',', '.') }}/pax per bulan &bull; Periode: {{ $startDate->isoFormat('MMMM Y') }} s/d {{ $endDate->isoFormat('MMMM Y') }}.
+                    Penerbitan tagihan dikelola tersendiri per kloter sesuai kesiapan masing-masing kloter.
+                </p>
+            </div>
+        </div>
+        <button type="button" @click="showTriggerModal = true" class="px-4 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-xs font-bold backdrop-blur transition whitespace-nowrap cursor-pointer shadow-sm">
+            Generate Tagihan Kloter Ini &rarr;
+        </button>
     </div>
 
     <!-- Informasi Detail Paket Kloter -->
@@ -251,6 +274,57 @@
                     @endforelse
                 </tbody>
             </table>
+        </div>
+    </div>
+
+    <!-- Modal Trigger Penagihan Khusus Kloter Ini -->
+    <div x-show="showTriggerModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+            <div x-show="showTriggerModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showTriggerModal = false"></div>
+
+            <div x-show="showTriggerModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
+                <form action="{{ route('admin.kloters.trigger-kloter-billing', $kloter) }}" method="POST">
+                    @csrf
+                    <div class="p-6">
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-[#346733]">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-gray-900 text-base">Generate Tagihan Kloter</h3>
+                                <p class="text-xs text-gray-500">{{ $kloter->name }} ({{ $kloter->code }})</p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1">Periode Penagihan (Bulan / Tahun)</label>
+                                <input type="month" name="billing_date" value="{{ date('Y-m') }}" class="w-full px-4 py-2.5 sm:py-3 text-sm rounded-xl border border-slate-300 shadow-sm focus:border-[#346733] focus:ring-2 focus:ring-[#346733] outline-none" required>
+                                <p class="text-[11px] text-gray-400 mt-1">Sistem idempoten: Tagihan yang sudah terbit pada bulan ini untuk kloter ini tidak akan terduplikasi.</p>
+                            </div>
+
+                            <div class="p-3 bg-emerald-50 rounded-xl text-xs text-emerald-900 border border-emerald-200 space-y-1">
+                                <div class="font-bold">Informasi Tagihan Kloter:</div>
+                                <ul class="list-disc list-inside space-y-0.5 text-[11px]">
+                                    <li>Biaya bulanan: Rp {{ number_format($kloter->monthly_per_pax, 0, ',', '.') }} / orang</li>
+                                    <li>Target total: Rp {{ number_format($kloter->target_per_pax, 0, ',', '.') }} / orang</li>
+                                    <li>Jumlah jama'ah terdaftar: {{ $totalPaxCount }} jiwa ({{ $totalFamilyCount }} akun keluarga)</li>
+                                    <li>Jama'ah susulan hanya ditagih sejak bulan bergabung, sisa bulan awal ditagihkan pada bulan akhir.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-50 px-6 py-3 flex justify-end gap-2">
+                        <button type="button" @click="showTriggerModal = false" class="px-4 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50">
+                            Batal
+                        </button>
+                        <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold text-white bg-[#346733] hover:bg-[#234622] shadow cursor-pointer">
+                            Jalankan Generate Kloter Ini
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 </div>
