@@ -1,6 +1,6 @@
 <!--
 File: resources/views/layouts/app.blade.php
-Tujuan: Master layout responsif hybrid: Desktop Sidebar kiri (termasuk menu Data Jamaah & Data Admin bagi Superadmin), Dropdown Profil Akun topbar, Mobile Bottom Nav Bar, Mobile Slide-over Drawer non-redundant (tidak menduplikasi menu nav bottom bar), Modal Pusat Notifikasi Interaktif, Global Ergonomic Form Field Styles, PWA Manifest & Service Worker Integration, serta Mandatory PWA Installation Guard (wajib install untuk akses dashboard)
+Tujuan: Master layout responsif hybrid: Desktop Sidebar kiri (termasuk menu Data Jamaah & Data Admin bagi Superadmin, serta Tagihan Jama'ah bagi staff), Dropdown Profil Akun topbar, Mobile Bottom Nav Bar, Mobile Slide-over Drawer non-redundant (tidak menduplikasi menu nav bottom bar), Modal Pusat Notifikasi Interaktif, Global Ergonomic Form Field Styles, PWA Manifest & Service Worker Integration, serta Mandatory PWA Installation Guard (wajib install untuk akses dashboard)
 Dipakai Oleh: Seluruh view aplikasi (Portal Jamaah dan Portal Admin)
 Dependensi Utama: Tailwind CSS CDN, Alpine.js CDN, Google Fonts (Plus Jakarta Sans), App\Services\NotificationService, PWA (manifest.json, sw.js)
 Daftar Komponen Utama: Desktop Sidebar (lg:flex), Desktop Topbar dengan Dropdown Profil & Tombol Notifikasi, Mobile Topbar dengan Tombol Notifikasi & Burger Button, Mobile Bottom Bar, Mobile Account Drawer (menu tambahan), Modal Pusat Notifikasi & Antrean Interaktif, Global Form Inputs CSS, Mandatory PWA Installation Overlay Guard, Main Content Container, Footer, Proof Modal Viewer
@@ -417,6 +417,12 @@ Side Effect: Render HTML shell, navigasi antarmuka, modal notifikasi real-time, 
                                 <span>Master Kloter</span>
                             </a>
 
+                            <!-- Tagihan Jama'ah (Piutang & Rekap Tagihan) -->
+                            <a href="{{ route('admin.invoices.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition {{ request()->routeIs('admin.invoices.*') ? 'bg-[#346733] text-white shadow-sm' : 'text-slate-600 hover:text-[#346733] hover:bg-slate-100' }}">
+                                <svg class="w-4 h-4 {{ request()->routeIs('admin.invoices.*') ? 'text-white' : 'text-slate-400' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/></svg>
+                                <span>Tagihan Jama'ah</span>
+                            </a>
+
                             @if(auth()->user()->isSuperAdmin())
                                 <!-- Data Jama'ah -->
                                 <a href="{{ route('admin.users.jamaah') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition {{ request()->routeIs('admin.users.jamaah*') ? 'bg-[#346733] text-white shadow-sm' : 'text-slate-600 hover:text-[#346733] hover:bg-slate-100' }}">
@@ -664,6 +670,7 @@ Side Effect: Render HTML shell, navigasi antarmuka, modal notifikasi real-time, 
 
                                     @if($isStaff)
                                         <!-- Khusus Staff: Menu manajemen yang belum ada di nav bottom bar -->
+                                        <a href="{{ route('admin.invoices.index') }}" class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50">Tagihan Jama'ah</a>
                                         <a href="{{ route('admin.registrations.index') }}" class="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50">
                                             <span>Approval Kloter</span>
                                             @if($pendingRegistrationsCount > 0)

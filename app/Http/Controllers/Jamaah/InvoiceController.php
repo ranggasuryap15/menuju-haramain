@@ -26,7 +26,8 @@ class InvoiceController extends Controller
         $invoices = Invoice::query()
             ->with(['registration.kloter', 'items.registrationPax.familyMember'])
             ->whereHas('registration', fn ($q) => $q->where('user_id', $user->id))
-            ->orderBy('billing_date', 'desc')
+            ->orderBy('billing_date', 'asc')
+            ->orderBy('id', 'asc')
             ->paginate(10);
 
         // Preload status penguncian kronologis secara batch (eliminasi N+1 query)

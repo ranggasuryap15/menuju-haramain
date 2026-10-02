@@ -33,6 +33,9 @@
  *   - test_superadmin_can_promote_and_demote_user_roles_with_security_guards()
  *   - test_kloter_specific_billing_generation_via_show_page()
  *   - test_csrf_token_mismatch_exception_handling_and_friendly_recovery()
+ *   - test_retroactive_billing_and_catchup_generation_for_older_periods()
+ *   - test_kloter_show_displays_paginated_payments_history_descending()
+ *   - test_superadmin_and_admin_keuangan_can_access_and_filter_unpaid_invoices_monitoring()
  * Side Effect: Database read/write dalam transaction rollback
  */
 
@@ -2266,6 +2269,110 @@ class TabunganUmrohTest extends TestCase
         $posNew = strpos($content, 'Rp 600.000');
         $posOld = strpos($content, 'Rp 400.000');
         $this->assertTrue($posNew !== false && $posOld !== false && $posNew < $posOld, 'Transaksi baru harus muncul lebih dulu daripada transaksi lama (descending order).');
+    }
+
+    /**
+     * Uji monitoring tagihan jama'ah bagi Superadmin & Admin Keuangan:
+     * - Superadmin & Admin Keuangan dapat mengakses daftar tagihan belum lunas seluruh jamaah.
+     * - Jamaah biasa ditolak (403 Forbidden).
+     * - Mendukung filter status, filter kloter, pencarian, dan melihat halaman detail tagihan.
+     */
+    public function test_superadmin_and_admin_keuangan_can_access_and_filter_unpaid_invoices_monitoring()
+    {
+        $superadmin = User::factory()->create(['role' => 'superadmin']);
+        $adminKeuangan = User::factory()->create(['role' => 'admin_keuangan']);
+        $jamaah = User::factory()->create(['role' => 'jamaah', 'name' => 'Jamaah Fauzi', 'phone' => '08123456789']);
+
+        $kloter = Kloter::create([
+            'name' => 'Kloter Monitoring A',
+            'code' => 'KLR-MON-A',
+            'target_per_pax' => 30000000.0,
+            'monthly_per_pax' => 1000000.0,
+            'start_date' => Carbon::now()->subMonths(2)->startOfMonth(),
+            'end_date' => Carbon::now()->addMonths(20)->endOfMonth(),
+            'status' => 'active',
+        ]);
+
+        $reg = KloterRegistration::create([
+            'kloter_id' => $kloter->id,
+            'user_id' => $jamaah->id,
+            'total_pax' => 1,
+            'status' => 'active',
+        ]);
+
+        $invUnpaid = Invoice::create([
+            'registration_id' => $reg->id,
+            'invoice_number' => 'INV-MON-001',
+            'billing_year' => 2026,
+            'billing_month' => 4,
+            'billing_date' => Carbon::create(2026, 4, 1),
+            'due_date' => Carbon::create(2026, 4, 10),
+            'total_amount' => 1000000.0,
+            'paid_amount' => 0.0,
+            'status' => Invoice::STATUS_UNPAID,
+        ]);
+
+        $invPartially = Invoice::create([
+            'registration_id' => $reg->id,
+            'invoice_number' => 'INV-MON-002',
+            'billing_year' => 2026,
+            'billing_month' => 5,
+            'billing_date' => Carbon::create(2026, 5, 1),
+            'due_date' => Carbon::create(2026, 5, 10),
+            'total_amount' => 1000000.0,
+            'paid_amount' => 300000.0,
+            'status' => Invoice::STATUS_PARTIALLY_PAID,
+        ]);
+
+        $invPaid = Invoice::create([
+            'registration_id' => $reg->id,
+            'invoice_number' => 'INV-MON-003',
+            'billing_year' => 2026,
+            'billing_month' => 6,
+            'billing_date' => Carbon::create(2026, 6, 1),
+            'due_date' => Carbon::create(2026, 6, 10),
+            'total_amount' => 1000000.0,
+            'paid_amount' => 1000000.0,
+            'status' => Invoice::STATUS_PAID,
+        ]);
+
+        // 1. Jamaah biasa tidak boleh mengakses
+        $jamaahResponse = $this->actingAs($jamaah)->get(route('admin.invoices.index'));
+        $jamaahResponse->assertStatus(403);
+
+        // 2. Superadmin dapat mengakses monitoring tagihan (default: all_unpaid)
+        $superadminResponse = $this->actingAs($superadmin)->get(route('admin.invoices.index'));
+        $superadminResponse->assertStatus(200);
+        $superadminResponse->assertSee('Monitoring Tagihan Jama\'ah', false);
+        $superadminResponse->assertSee('INV-MON-001');
+        $superadminResponse->assertSee('INV-MON-002');
+        // INV-MON-003 yang sudah lunas tidak muncul pada filter default all_unpaid
+        $superadminResponse->assertDontSee('INV-MON-003');
+
+        // Total piutang belum lunas = 1jt (INV-1) + 700rb (INV-2) = 1.700.000
+        $superadminResponse->assertSee('Rp 1.700.000');
+
+        // 3. Admin Keuangan juga dapat mengakses
+        $keuanganResponse = $this->actingAs($adminKeuangan)->get(route('admin.invoices.index'));
+        $keuanganResponse->assertStatus(200);
+
+        // 4. Filter khusus status 'paid'
+        $paidResponse = $this->actingAs($superadmin)->get(route('admin.invoices.index', ['status' => 'paid']));
+        $paidResponse->assertStatus(200);
+        $paidResponse->assertSee('INV-MON-003');
+        $paidResponse->assertDontSee('INV-MON-001');
+
+        // 5. Pencarian nama jamaah
+        $searchResponse = $this->actingAs($superadmin)->get(route('admin.invoices.index', ['search' => 'Fauzi']));
+        $searchResponse->assertStatus(200);
+        $searchResponse->assertSee('Jamaah Fauzi');
+
+        // 6. Melihat detail tagihan admin (/admin/invoices/{invoice})
+        $detailResponse = $this->actingAs($superadmin)->get(route('admin.invoices.show', $invUnpaid));
+        $detailResponse->assertStatus(200);
+        $detailResponse->assertSee('INV-MON-001');
+        $detailResponse->assertSee('Jamaah Fauzi');
+        $detailResponse->assertSee('Kloter Monitoring A');
     }
 }
 

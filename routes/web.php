@@ -1,14 +1,15 @@
 <?php
 /**
  * File: routes/web.php
- * Tujuan: Definisi rute web aplikasi Tabungan Umroh (Autentikasi guest, Portal Jamaah, Portal Admin Keuangan & Superadmin, Manajemen Pengguna)
+ * Tujuan: Definisi rute web aplikasi Tabungan Umroh (Autentikasi guest, Portal Jamaah, Portal Admin Keuangan & Superadmin, Manajemen Tagihan, Manajemen Pengguna)
  * Dipakai Oleh: Laravel Routing Kernel
  * Dependensi Utama: AuthController, Jamaah\* Controllers, Admin\* Controllers, UserController
- * Daftar Rute Utama: /login, /register, /profile, /jamaah/*, /admin/*, /admin/users/*
+ * Daftar Rute Utama: /login, /register, /profile, /jamaah/*, /admin/*, /admin/invoices/*, /admin/users/*
  * Side Effect: Penanganan HTTP request dan proteksi middleware guest, auth, serta role
  */
 
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\InvoiceController as AdminInvoiceController;
 use App\Http\Controllers\Admin\KloterController;
 use App\Http\Controllers\Admin\PaymentApprovalController;
 use App\Http\Controllers\Admin\RegistrationApprovalController;
@@ -98,6 +99,10 @@ Route::middleware(['auth', 'role:superadmin,admin_keuangan'])->prefix('admin')->
     Route::put('/kloters/{kloter}', [KloterController::class, 'update'])->name('kloters.update');
     Route::post('/kloters/trigger-billing', [KloterController::class, 'triggerBilling'])->name('kloters.trigger-billing');
     Route::post('/kloters/{kloter}/trigger-billing', [KloterController::class, 'triggerKloterBilling'])->name('kloters.trigger-kloter-billing');
+
+    // Monitoring Tagihan Jama'ah (Superadmin & Admin Keuangan)
+    Route::get('/invoices', [AdminInvoiceController::class, 'index'])->name('invoices.index');
+    Route::get('/invoices/{invoice}', [AdminInvoiceController::class, 'show'])->name('invoices.show');
 
     // Manajemen Pengguna (Khusus Superadmin: Data Jama'ah & Data Admin)
     Route::middleware(['role:superadmin'])->prefix('users')->name('users.')->group(function () {
