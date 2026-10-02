@@ -164,8 +164,8 @@
                                     <span>Terkunci &rarr;</span>
                                 </a>
                             @else
-                                <a href="{{ route('jamaah.invoices.show', $inv) }}" class="px-3 py-1.5 rounded-lg bg-[#346733] hover:bg-[#234622] text-white text-xs font-bold shadow-sm transition-colors">
-                                    {{ $inv->isPaid() ? 'Lihat Rincian &rarr;' : 'Detail & Transfer &rarr;' }}
+                                <a href="{{ route('jamaah.invoices.show', $inv) }}" class="px-3 py-1.5 rounded-lg bg-[#346733] hover:bg-[#234622] text-white text-xs font-bold shadow-sm transition-colors flex items-center space-x-1">
+                                    <span>{{ $inv->isPaid() ? 'Lihat Rincian' : 'Detail & Transfer' }} &rarr;</span>
                                 </a>
                             @endif
                         </div>
