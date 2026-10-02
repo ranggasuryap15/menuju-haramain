@@ -38,6 +38,7 @@
  *   - test_superadmin_and_admin_keuangan_can_access_and_filter_unpaid_invoices_monitoring()
  *   - test_admin_and_superadmin_can_update_bank_account_details_and_add_new_bank()
  *   - test_superadmin_can_delete_jamaah_with_cascade_and_storage_cleanup()
+ *   - test_kloter_whatsapp_group_url_management_and_payment_wa_reminder()
  * Side Effect: Database read/write dalam transaction rollback
  */
 
@@ -2603,6 +2604,135 @@ class TabunganUmrohTest extends TestCase
 
         // 5. Verifikasi berkas fisik bukti transfer telah dibersihkan dari disk storage
         Storage::disk('public')->assertMissing($storedPath);
+    }
+
+    /**
+     * Test integrasi link WhatsApp grup kloter & tombol reminder WhatsApp setelah pembayaran
+     */
+    public function test_kloter_whatsapp_group_url_management_and_payment_wa_reminder(): void
+    {
+        $superadmin = User::factory()->create([
+            'role' => User::ROLE_SUPERADMIN,
+            'phone' => '081234567890',
+        ]);
+
+        $jamaah = User::factory()->create([
+            'role' => User::ROLE_JAMAAH,
+            'name' => 'Ahmad Fulan',
+            'phone' => '089876543210',
+        ]);
+
+        // 1. Superadmin membuat kloter dengan whatsapp_group_url
+        $createResponse = $this->actingAs($superadmin)->post(route('admin.kloters.store'), [
+            'name' => 'Kloter Syawal Berkah 1448 H',
+            'code' => 'kltr-syw-1448',
+            'target_per_pax' => 35000000,
+            'monthly_per_pax' => 3500000,
+            'start_date' => Carbon::now()->toDateString(),
+            'end_date' => Carbon::now()->addMonths(10)->toDateString(),
+            'whatsapp_group_url' => 'https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv',
+            'status' => 'active',
+        ]);
+        $createResponse->assertRedirect(route('admin.kloters.index'));
+        $createResponse->assertSessionHas('success');
+
+        $kloter = Kloter::where('code', 'KLTR-SYW-1448')->firstOrFail();
+        $this->assertEquals('https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv', $kloter->whatsapp_group_url);
+
+        // 2. Tampilkan di admin kloter show
+        $adminShowResponse = $this->actingAs($superadmin)->get(route('admin.kloters.show', $kloter));
+        $adminShowResponse->assertStatus(200);
+        $adminShowResponse->assertSee('https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv');
+        $adminShowResponse->assertSee('Link Grup WhatsApp');
+
+        // 3. Superadmin mengupdate whatsapp_group_url
+        $updateResponse = $this->actingAs($superadmin)->put(route('admin.kloters.update', $kloter), [
+            'name' => 'Kloter Syawal Berkah 1448 H Updated',
+            'code' => 'KLTR-SYW-1448',
+            'target_per_pax' => 35000000,
+            'monthly_per_pax' => 3500000,
+            'start_date' => Carbon::now()->toDateString(),
+            'end_date' => Carbon::now()->addMonths(10)->toDateString(),
+            'whatsapp_group_url' => 'https://chat.whatsapp.com/NewGroupLink123456',
+            'status' => 'active',
+        ]);
+        $updateResponse->assertRedirect(route('admin.kloters.show', $kloter));
+        $kloter->refresh();
+        $this->assertEquals('https://chat.whatsapp.com/NewGroupLink123456', $kloter->whatsapp_group_url);
+
+        // 4. Daftarkan jamaah ke kloter ini
+        $reg = KloterRegistration::create([
+            'user_id' => $jamaah->id,
+            'kloter_id' => $kloter->id,
+            'status' => KloterRegistration::STATUS_ACTIVE,
+            'total_pax' => 1,
+            'target_total' => 35000000,
+            'monthly_total' => 3500000,
+        ]);
+
+        $family = FamilyMember::create([
+            'user_id' => $jamaah->id,
+            'full_name' => 'Ahmad Fulan',
+            'relationship' => 'Kepala Keluarga',
+            'gender' => 'L',
+            'birth_date' => '1985-05-10',
+            'nik' => '3201123456780001',
+        ]);
+
+        $pax = RegistrationPax::create([
+            'registration_id' => $reg->id,
+            'family_member_id' => $family->id,
+            'status' => 'active',
+        ]);
+
+        // 5. Cek tampilan di Dashboard Jamaah: ada link grup WA
+        $dashboardResponse = $this->actingAs($jamaah)->get(route('jamaah.dashboard'));
+        $dashboardResponse->assertStatus(200);
+        $dashboardResponse->assertSee('https://chat.whatsapp.com/NewGroupLink123456');
+        $dashboardResponse->assertSee('Gabung Grup WA');
+
+        // 6. Buat tagihan dan payment pending
+        $invoice = Invoice::create([
+            'registration_id' => $reg->id,
+            'invoice_number' => 'INV-202610-TESTWA',
+            'billing_month' => 10,
+            'billing_year' => 2026,
+            'billing_date' => Carbon::create(2026, 10, 1),
+            'due_date' => Carbon::create(2026, 10, 10),
+            'total_amount' => 3500000,
+            'paid_amount' => 0,
+            'status' => Invoice::STATUS_UNPAID,
+        ]);
+
+        $bank = BankAccount::create([
+            'bank_name' => 'BSI Bank Syariah',
+            'account_number' => '7112233445',
+            'account_holder' => 'Yayasan Menuju Haramain',
+            'is_active' => true,
+        ]);
+
+        $dummyProof = UploadedFile::fake()->image('struk_wa.jpg');
+        $storedProof = $dummyProof->store('payment-proofs/2026/10', 'public');
+
+        $payment = Payment::create([
+            'invoice_id' => $invoice->id,
+            'user_id' => $jamaah->id,
+            'bank_account_id' => $bank->id,
+            'amount' => 3500000.0,
+            'payment_date' => Carbon::now()->toDateString(),
+            'proof_path' => $storedProof,
+            'status' => Payment::STATUS_PENDING,
+        ]);
+
+        // 7. Buka halaman detail tagihan jamaah
+        $invoiceShowResponse = $this->actingAs($jamaah)->get(route('jamaah.invoices.show', $invoice));
+        $invoiceShowResponse->assertStatus(200);
+        
+        // Verifikasi keberadaan banner reminder WhatsApp admin & link grup WhatsApp kloter
+        $invoiceShowResponse->assertSee('Bukti Transfer Sedang Diverifikasi Admin');
+        $invoiceShowResponse->assertSee('Kirim Reminder ke WA Admin');
+        $invoiceShowResponse->assertSee('wa.me/6281234567890', false);
+        $invoiceShowResponse->assertSee('https://chat.whatsapp.com/NewGroupLink123456');
     }
 }
 

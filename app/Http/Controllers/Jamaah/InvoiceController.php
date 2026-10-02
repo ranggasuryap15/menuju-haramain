@@ -1,11 +1,11 @@
 <?php
 /**
  * File: app/Http/Controllers/Jamaah/InvoiceController.php
- * Tujuan: Menampilkan daftar tagihan bulanan dengan preloading status penguncian kronologis dan halaman detail tagihan beserta rekening bank spesifik kloter/fallback
+ * Tujuan: Menampilkan daftar tagihan bulanan dengan preloading status penguncian kronologis dan halaman detail tagihan beserta rekening bank spesifik kloter/fallback dan kontak WhatsApp admin untuk reminder
  * Dipakai Oleh: routes/web.php (/jamaah/invoices, /jamaah/invoices/{invoice})
- * Dependensi Utama: App\Models\Invoice, App\Models\BankAccount, Auth
+ * Dependensi Utama: App\Models\Invoice, App\Models\BankAccount, App\Models\User, Auth
  * Daftar Fungsi Utama: index(), show()
- * Side Effect: Query DB data invoice, invoice_items, bank_accounts, kloter_bank_account, dan payments
+ * Side Effect: Query DB data invoice, invoice_items, bank_accounts, kloter_bank_account, users (admin contact), dan payments
  */
 
 namespace App\Http\Controllers\Jamaah;
@@ -83,7 +83,15 @@ class InvoiceController extends Controller
             ? $kloter->bankAccounts->where('is_active', true)
             : BankAccount::active()->get();
 
-        return view('jamaah.invoices.show', compact('invoice', 'bankAccounts'));
+        // Mengambil kontak admin / superadmin untuk tombol reminder konfirmasi transfer via WhatsApp
+        $adminContact = \App\Models\User::query()
+            ->whereIn('role', [\App\Models\User::ROLE_SUPERADMIN, \App\Models\User::ROLE_ADMIN_KEUANGAN])
+            ->whereNotNull('phone')
+            ->where('phone', '!=', '')
+            ->orderByRaw("CASE WHEN role = 'superadmin' THEN 1 ELSE 2 END")
+            ->first();
+
+        return view('jamaah.invoices.show', compact('invoice', 'bankAccounts', 'adminContact'));
     }
 }
 

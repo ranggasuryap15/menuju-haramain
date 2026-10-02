@@ -1,7 +1,7 @@
 <?php
 /**
  * File: app/Models/Kloter.php
- * Tujuan: Model master data kloter/paket umroh dengan target tabungan, akumulasi dana terkumpul, rentang tanggal periode, mutator kode uppercase, dan relasi rekening bank kloter
+ * Tujuan: Model master data kloter/paket umroh dengan target tabungan, akumulasi dana terkumpul, rentang tanggal periode, link grup WhatsApp kloter, mutator kode uppercase, dan relasi rekening bank kloter
  * Dipakai Oleh: KloterController, BillingGenerateCommand, RegistrationController, InvoiceController
  * Dependensi Utama: Illuminate\Database\Eloquent\Model, Illuminate\Database\Eloquent\Casts\Attribute, KloterRegistration, Invoice, Payment, BankAccount
  * Daftar Fungsi Utama: registrations(), invoices(), bankAccounts(), code(), isActive(), getDurationMonthsAttribute(), getTotalPaidAttribute(), getTotalBilledAttribute()
@@ -30,6 +30,7 @@ class Kloter extends Model
         'start_date',
         'end_date',
         'description',
+        'whatsapp_group_url',
         'status',
     ];
 

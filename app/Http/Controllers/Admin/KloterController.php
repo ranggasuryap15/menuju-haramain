@@ -2,11 +2,11 @@
 
 /**
  * File: app/Http/Controllers/Admin/KloterController.php
- * Tujuan: Manajemen master kloter tabungan umroh (pembuatan kloter, pengubahan detail kloter, normalisasi kode kloter selalu UPPERCASE, asosiasi multi-rekening bank per kloter, rentang periode, tarif per pax, detail peserta kloter, rekapitulasi dana terkumpul riil, riwayat transaksi pembayaran jamaah kloter berpaginasi descending, dan penagihan spesifik per-kloter)
+ * Tujuan: Manajemen master kloter tabungan umroh (pembuatan kloter, link WhatsApp grup kloter, pengubahan detail kloter, normalisasi kode kloter selalu UPPERCASE, asosiasi multi-rekening bank per kloter, rentang periode, tarif per pax, detail peserta kloter, rekapitulasi dana terkumpul riil, riwayat transaksi pembayaran jamaah kloter berpaginasi descending, dan penagihan spesifik per-kloter)
  * Dipakai Oleh: routes/web.php (/admin/kloters, /admin/kloters/create, /admin/kloters/{kloter}, /admin/kloters/{kloter}/edit, /admin/kloters/{kloter}/trigger-billing)
  * Dependensi Utama: App\Models\Kloter, App\Models\BankAccount, App\Models\Payment, App\Services\BillingService, Request, Illuminate\Validation\Rule
  * Daftar Fungsi Utama: index(), create(), store(), show(), edit(), update(), triggerBilling(), triggerKloterBilling()
- * Side Effect: Write DB tabel kloters (insert/update uppercase code), pivot kloter_bank_account (sync), eksekusi pembuatan tagihan bulanan
+ * Side Effect: Write DB tabel kloters (insert/update uppercase code, whatsapp_group_url), pivot kloter_bank_account (sync), eksekusi pembuatan tagihan bulanan
  */
 
 namespace App\Http\Controllers\Admin;
@@ -59,6 +59,7 @@ class KloterController extends Controller
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after:start_date'],
             'description' => ['nullable', 'string'],
+            'whatsapp_group_url' => ['nullable', 'url', 'max:255'],
             'status' => ['required', 'in:draft,active,closed,completed'],
             'bank_account_ids' => ['nullable', 'array'],
             'bank_account_ids.*' => ['exists:bank_accounts,id'],
@@ -148,6 +149,7 @@ class KloterController extends Controller
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after:start_date'],
             'description' => ['nullable', 'string'],
+            'whatsapp_group_url' => ['nullable', 'url', 'max:255'],
             'status' => ['required', 'in:draft,active,closed,completed'],
             'bank_account_ids' => ['nullable', 'array'],
             'bank_account_ids.*' => ['exists:bank_accounts,id'],
