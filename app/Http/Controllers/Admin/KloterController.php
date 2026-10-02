@@ -106,7 +106,6 @@ class KloterController extends Controller
             'registrations.invoices.payments' => fn($q) => $q->where('status', Payment::STATUS_APPROVED),
         ]);
 
-        return view('admin.kloters.show', compact('kloter'));
         // Mengambil seluruh transaksi pembayaran jamaah pada kloter ini dengan paginasi descending paling recent
         $payments = Payment::query()
             ->whereHas('invoice.registration', fn($q) => $q->where('kloter_id', $kloter->id))

@@ -1,9 +1,9 @@
 <!--
 File: resources/views/layouts/app.blade.php
-Tujuan: Master layout responsif hybrid: Desktop Sidebar kiri (termasuk menu Data Jamaah & Data Admin bagi Superadmin), Dropdown Profil Akun topbar, Mobile Bottom Nav Bar, Mobile Slide-over Drawer dengan click-outside auto-collapse, Modal Pusat Notifikasi Interaktif, Global Ergonomic Form Field Styles, PWA Manifest & Service Worker Integration, serta Mandatory PWA Installation Guard (wajib install untuk akses dashboard)
+Tujuan: Master layout responsif hybrid: Desktop Sidebar kiri (termasuk menu Data Jamaah & Data Admin bagi Superadmin), Dropdown Profil Akun topbar, Mobile Bottom Nav Bar, Mobile Slide-over Drawer non-redundant (tidak menduplikasi menu nav bottom bar), Modal Pusat Notifikasi Interaktif, Global Ergonomic Form Field Styles, PWA Manifest & Service Worker Integration, serta Mandatory PWA Installation Guard (wajib install untuk akses dashboard)
 Dipakai Oleh: Seluruh view aplikasi (Portal Jamaah dan Portal Admin)
 Dependensi Utama: Tailwind CSS CDN, Alpine.js CDN, Google Fonts (Plus Jakarta Sans), App\Services\NotificationService, PWA (manifest.json, sw.js)
-Daftar Komponen Utama: Desktop Sidebar (lg:flex), Desktop Topbar dengan Dropdown Profil & Tombol Notifikasi, Mobile Topbar dengan Tombol Notifikasi & Burger Button, Mobile Bottom Bar, Mobile Account Drawer, Modal Pusat Notifikasi & Antrean Interaktif, Global Form Inputs CSS, Mandatory PWA Installation Overlay Guard, Main Content Container, Footer, Proof Modal Viewer
+Daftar Komponen Utama: Desktop Sidebar (lg:flex), Desktop Topbar dengan Dropdown Profil & Tombol Notifikasi, Mobile Topbar dengan Tombol Notifikasi & Burger Button, Mobile Bottom Bar, Mobile Account Drawer (menu tambahan), Modal Pusat Notifikasi & Antrean Interaktif, Global Form Inputs CSS, Mandatory PWA Installation Overlay Guard, Main Content Container, Footer, Proof Modal Viewer
 Side Effect: Render HTML shell, navigasi antarmuka, modal notifikasi real-time, standar visual input form, dan pemblokiran akses browser sebelum aplikasi terinstall (PWA standalone mode)
 -->
 <!DOCTYPE html>
@@ -644,9 +644,9 @@ Side Effect: Render HTML shell, navigasi antarmuka, modal notifikasi real-time, 
                                     </button>
                                 </div>
 
-                                <!-- Menu Ekstra Mobile -->
+                                <!-- Menu Ekstra Mobile (Hanya menu yang belum ada di Nav Bottom Bar) -->
                                 <div class="py-4 space-y-2">
-                                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Navigasi Utama</div>
+                                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Menu Lainnya</div>
                                     <!-- Tombol Buka Modal Notifikasi dari Drawer -->
                                     <button type="button" @click="mobileDrawerOpen = false; notificationsOpen = true" class="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-between transition cursor-pointer mb-2">
                                         <div class="flex items-center gap-2.5">
@@ -663,19 +663,28 @@ Side Effect: Render HTML shell, navigasi antarmuka, modal notifikasi real-time, 
                                     </button>
 
                                     @if($isStaff)
-                                        <a href="{{ route('admin.dashboard') }}" class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50">Dashboard Admin</a>
-                                        <a href="{{ route('admin.registrations.index') }}" class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50">Approval Kloter ({{ $pendingRegistrationsCount }})</a>
-                                        <a href="{{ route('admin.payments.index') }}" class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50">Approval Pembayaran ({{ $pendingPaymentsCount }})</a>
-                                        <a href="{{ route('admin.kloters.index') }}" class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50">Master Kloter</a>
+                                        <!-- Khusus Staff: Menu manajemen yang belum ada di nav bottom bar -->
+                                        <a href="{{ route('admin.registrations.index') }}" class="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                                            <span>Approval Kloter</span>
+                                            @if($pendingRegistrationsCount > 0)
+                                                <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                                    {{ $pendingRegistrationsCount }}
+                                                </span>
+                                            @endif
+                                        </a>
                                         @if(auth()->user()->isSuperAdmin())
                                             <a href="{{ route('admin.users.jamaah') }}" class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50">Data Jama'ah</a>
                                             <a href="{{ route('admin.users.admins') }}" class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50">Data Admin</a>
                                         @endif
+
+                                        <div class="pt-2 my-1 border-t border-slate-100">
+                                            <div class="px-3 mb-1 text-[9px] font-bold tracking-wider text-slate-400 uppercase">Akses Jama'ah Pribadi</div>
+                                        </div>
+                                        <a href="{{ route('jamaah.invoices.index') }}" class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50">Tagihan Bulanan</a>
+                                        <a href="{{ route('jamaah.family.index') }}" class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50">Data Anggota Keluarga</a>
                                     @endif
-                                    <a href="{{ route('jamaah.dashboard') }}" class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50">Tabungan Saya</a>
-                                    <a href="{{ route('jamaah.invoices.index') }}" class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50">Tagihan Bulanan</a>
-                                    <a href="{{ route('jamaah.family.index') }}" class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50">Data Anggota Keluarga</a>
-                                    <a href="{{ route('jamaah.registrations.create') }}" class="block px-3 py-2 rounded-lg text-xs font-bold text-teal-700 bg-teal-50">Daftar Kloter Baru</a>
+
+                                    <a href="{{ route('jamaah.registrations.create') }}" class="block px-3 py-2 rounded-lg text-xs font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 transition">Daftar Kloter Baru</a>
                                     <a href="{{ route('profile.edit') }}" class="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center justify-between">
                                         <span>Profil Saya</span>
                                         <span class="text-[10px] text-slate-400">Ubah Akun &rarr;</span>
