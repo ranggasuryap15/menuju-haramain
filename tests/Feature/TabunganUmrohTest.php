@@ -1066,11 +1066,19 @@ class TabunganUmrohTest extends TestCase
         $this->assertNotNull($invoiceOkt->getUnpaidPreviousInvoice());
         $this->assertEquals($invoiceSep->id, $invoiceOkt->getUnpaidPreviousInvoice()->id);
 
-        // 2. Verifikasi UI Jamaah: Halaman Daftar Tagihan (index) menampilkan badge Terkunci
+        // 2. Verifikasi UI Jamaah: Halaman Daftar Tagihan (index) menampilkan badge Terkunci dan urutan ASC
         $this->actingAs($jamaah);
         $resIndex = $this->get(route('jamaah.invoices.index'));
         $resIndex->assertStatus(200);
         $resIndex->assertSee('Terkunci');
+
+        // Verifikasi urutan ASC: tagihan September harus berada di atas tagihan Oktober
+        $content = $resIndex->getContent();
+        $posSep = strpos($content, $invoiceSep->invoice_number);
+        $posOkt = strpos($content, $invoiceOkt->invoice_number);
+        $this->assertNotFalse($posSep);
+        $this->assertNotFalse($posOkt);
+        $this->assertTrue($posSep < $posOkt, 'Tagihan periode sebelumnya harus tampil lebih atas (ASC) dibanding tagihan periode selanjutnya');
 
         // 3. Verifikasi UI Jamaah: Halaman Detail Tagihan Oktober (show)
         $resShowOkt = $this->get(route('jamaah.invoices.show', $invoiceOkt));
