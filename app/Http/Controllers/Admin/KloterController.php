@@ -1,7 +1,9 @@
 <?php
+
 /**
  * File: app/Http/Controllers/Admin/KloterController.php
  * Tujuan: Manajemen master kloter tabungan umroh (pembuatan kloter, pengubahan detail kloter, normalisasi kode kloter selalu UPPERCASE, asosiasi multi-rekening bank per kloter, rentang periode, tarif per pax, detail peserta kloter, rekapitulasi dana terkumpul riil, dan penagihan spesifik per-kloter)
+ * Tujuan: Manajemen master kloter tabungan umroh (pembuatan kloter, pengubahan detail kloter, normalisasi kode kloter selalu UPPERCASE, asosiasi multi-rekening bank per kloter, rentang periode, tarif per pax, detail peserta kloter, rekapitulasi dana terkumpul riil, riwayat transaksi pembayaran jamaah kloter berpaginasi descending, dan penagihan spesifik per-kloter)
  * Dipakai Oleh: routes/web.php (/admin/kloters, /admin/kloters/create, /admin/kloters/{kloter}, /admin/kloters/{kloter}/edit, /admin/kloters/{kloter}/trigger-billing)
  * Dependensi Utama: App\Models\Kloter, App\Models\BankAccount, App\Models\Payment, App\Services\BillingService, Request, Illuminate\Validation\Rule
  * Daftar Fungsi Utama: index(), create(), store(), show(), edit(), update(), triggerBilling(), triggerKloterBilling()
@@ -29,7 +31,7 @@ class KloterController extends Controller
             ->withCount(['registrations'])
             ->with([
                 'bankAccounts',
-                'registrations.invoices.payments' => fn ($q) => $q->where('status', Payment::STATUS_APPROVED),
+                'registrations.invoices.payments' => fn($q) => $q->where('status', Payment::STATUS_APPROVED),
             ])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -101,10 +103,25 @@ class KloterController extends Controller
             'bankAccounts',
             'registrations.user',
             'registrations.paxes.familyMember',
-            'registrations.invoices.payments' => fn ($q) => $q->where('status', Payment::STATUS_APPROVED),
+            'registrations.invoices.payments' => fn($q) => $q->where('status', Payment::STATUS_APPROVED),
         ]);
 
         return view('admin.kloters.show', compact('kloter'));
+        // Mengambil seluruh transaksi pembayaran jamaah pada kloter ini dengan paginasi descending paling recent
+        $payments = Payment::query()
+            ->whereHas('invoice.registration', fn($q) => $q->where('kloter_id', $kloter->id))
+            ->with([
+                'user',
+                'invoice',
+                'bankAccount',
+                'verifier',
+            ])
+            ->orderBy('created_at', 'desc')
+            ->orderBy('id', 'desc')
+            ->paginate(10, ['*'], 'payments_page')
+            ->withQueryString();
+
+        return view('admin.kloters.show', compact('kloter', 'payments'));
     }
 
     public function edit(Kloter $kloter): View

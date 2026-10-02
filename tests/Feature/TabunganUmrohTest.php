@@ -2161,6 +2161,112 @@ class TabunganUmrohTest extends TestCase
         ]);
         $this->assertEquals(7, Invoice::where('registration_id', $registration->id)->count());
     }
+
+    /**
+     * Uji halaman detail kloter menampilkan riwayat transaksi pembayaran jamaah:
+     * - Menampilkan data pembayaran lengkap (pembayar, invoice, rekening tujuan, nominal, status)
+     * - Terurut descending berdasarkan created_at (paling recent di awal)
+     * - Terpaginasi dengan rapi
+     */
+    public function test_kloter_show_displays_paginated_payments_history_descending()
+    {
+        $superadmin = User::factory()->create(['role' => 'superadmin']);
+        $kloter = Kloter::create([
+            'name' => 'Kloter Khusus Transaksi',
+            'code' => 'KLR-TX',
+            'target_per_pax' => 30000000.0,
+            'monthly_per_pax' => 1000000.0,
+            'start_date' => Carbon::now()->subMonths(3)->startOfMonth(),
+            'end_date' => Carbon::now()->addMonths(20)->endOfMonth(),
+            'status' => 'active',
+        ]);
+
+        $bank = BankAccount::create([
+            'bank_name' => 'BSI Tabungan',
+            'account_number' => '9988776655',
+            'account_holder' => 'BMT Haramain',
+            'is_active' => true,
+        ]);
+        $kloter->bankAccounts()->attach($bank->id);
+
+        $jamaah = User::factory()->create(['role' => 'jamaah', 'name' => 'Budi Santoso']);
+        $pax = FamilyMember::create([
+            'user_id' => $jamaah->id,
+            'full_name' => 'Budi Santoso',
+            'relationship' => 'Diri Sendiri',
+        ]);
+        $reg = KloterRegistration::create([
+            'kloter_id' => $kloter->id,
+            'user_id' => $jamaah->id,
+            'total_pax' => 1,
+            'status' => 'active',
+        ]);
+        RegistrationPax::create([
+            'registration_id' => $reg->id,
+            'family_member_id' => $pax->id,
+            'status' => 'active',
+        ]);
+
+        $invoice = Invoice::create([
+            'registration_id' => $reg->id,
+            'invoice_number' => 'INV-TX-001',
+            'billing_year' => Carbon::now()->year,
+            'billing_month' => Carbon::now()->month,
+            'billing_date' => Carbon::now()->startOfMonth(),
+            'due_date' => Carbon::now()->startOfMonth()->addDays(9),
+            'total_amount' => 1000000.0,
+            'paid_amount' => 1000000.0,
+            'status' => Invoice::STATUS_PAID,
+        ]);
+
+        // Buat 2 pembayaran dengan waktu berbeda
+        $paymentOld = Payment::create([
+            'invoice_id' => $invoice->id,
+            'user_id' => $jamaah->id,
+            'bank_account_id' => $bank->id,
+            'amount' => 400000.0,
+            'payment_date' => Carbon::now()->subDays(5),
+            'proof_path' => 'payments/proof_old.jpg',
+            'sender_bank' => 'BCA',
+            'sender_account_name' => 'Budi S',
+            'status' => Payment::STATUS_APPROVED,
+        ]);
+        $paymentOld->forceFill(['created_at' => Carbon::now()->subDays(5)])->save();
+
+        $paymentNew = Payment::create([
+            'invoice_id' => $invoice->id,
+            'user_id' => $jamaah->id,
+            'bank_account_id' => $bank->id,
+            'amount' => 600000.0,
+            'payment_date' => Carbon::now()->subDay(),
+            'proof_path' => 'payments/proof_new.jpg',
+            'sender_bank' => 'Mandiri',
+            'sender_account_name' => 'Budi Santoso',
+            'status' => Payment::STATUS_APPROVED,
+        ]);
+        $paymentNew->forceFill(['created_at' => Carbon::now()->subDay()])->save();
+
+        // Akses halaman show kloter
+        $response = $this->actingAs($superadmin)->get(route('admin.kloters.show', $kloter));
+        $response->assertStatus(200);
+
+        // Verifikasi judul section dan badge transaksi
+        $response->assertSee('Riwayat Transaksi Pembayaran');
+        $response->assertSee('2 Transaksi');
+
+        // Verifikasi rincian pembayaran tampil
+        $response->assertSee('Budi Santoso');
+        $response->assertSee('INV-TX-001');
+        $response->assertSee('Rp 600.000');
+        $response->assertSee('Rp 400.000');
+        $response->assertSee('BSI Tabungan');
+
+        // Verifikasi urutan: transaksi baru ($paymentNew) muncul sebelum transaksi lama ($paymentOld)
+        $content = $response->getContent();
+        $posNew = strpos($content, 'Rp 600.000');
+        $posOld = strpos($content, 'Rp 400.000');
+        $this->assertTrue($posNew !== false && $posOld !== false && $posNew < $posOld, 'Transaksi baru harus muncul lebih dulu daripada transaksi lama (descending order).');
+    }
 }
 
 

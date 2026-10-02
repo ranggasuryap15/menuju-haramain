@@ -1,10 +1,10 @@
 {{--
 /**
  * File: resources/views/admin/kloters/show.blade.php
- * Tujuan: Menampilkan rincian detail master kloter umroh, panel pemicu penagihan khusus kloter ini (per bulan atau sekaligus sejak awal kloter), agregat keuangan, daftar rekening bank penampung kloter, tombol navigasi edit kloter, dan daftar pendaftar keluarga beserta anggota pax & status awal penagihan
+ * Tujuan: Menampilkan rincian detail master kloter umroh, panel pemicu penagihan khusus kloter ini (per bulan atau sekaligus sejak awal kloter), agregat keuangan, daftar rekening bank penampung kloter, tombol navigasi edit kloter, daftar pendaftar keluarga beserta anggota pax & status awal penagihan, serta tabel riwayat transaksi pembayaran jamaah lengkap dengan paginasi descending
  * Dipakai Oleh: App\Http\Controllers\Admin\KloterController@show
- * Dependensi Utama: Tailwind CSS CDN, Alpine.js, App\Models\Kloter, App\Models\BankAccount
- * Daftar Komponen Utama: Breadcrumb, Tombol aksi edit & tombol generate tagihan kloter, Panel penagihan kloter terpisah, Metrik keuangan & agregasi pax kloter, informasi paket, kartu rekening bank tujuan kloter, tabel pendaftar keluarga dengan status awal tagihan, modal generate tagihan kloter per bulan / catch-up all pending
+ * Dependensi Utama: Tailwind CSS CDN, Alpine.js, App\Models\Kloter, App\Models\BankAccount, App\Models\Payment
+ * Daftar Komponen Utama: Breadcrumb, Tombol aksi edit & generate tagihan kloter, Panel penagihan kloter terpisah, Metrik keuangan & agregasi pax kloter, informasi paket, kartu rekening bank tujuan kloter, tabel pendaftar keluarga dengan status awal tagihan, tabel riwayat transaksi pembayaran jamaah berpaginasi descending, modal generate tagihan kloter per bulan / catch-up all pending
  * Side Effect: Tampilan detail kloter, POST form ke admin.kloters.trigger-kloter-billing untuk penerbitan invoice per-kloter
  */
 --}}
@@ -286,6 +286,186 @@
                 </tbody>
             </table>
         </div>
+    </div>
+
+    <!-- Riwayat Transaksi Pembayaran Jamaah Pada Kloter Ini -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-[#346733]">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                    </div>
+                    <h2 class="text-base font-bold text-gray-900">Riwayat Transaksi Pembayaran Jama'ah</h2>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">
+                    Semua transaksi pembayaran tabungan umroh oleh jama'ah pada kloter ini, diurutkan dari yang terbaru.
+                </p>
+            </div>
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                {{ $payments->total() }} Transaksi
+            </span>
+        </div>
+
+        <!-- Mobile Cards Format -->
+        <div class="sm:hidden divide-y divide-slate-100 p-4 space-y-3">
+            @forelse($payments as $payment)
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-900">{{ $payment->user->name }}</span>
+                        @if($payment->isApproved())
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">Approved</span>
+                        @elseif($payment->isPending())
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">Pending</span>
+                        @else
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800">Rejected</span>
+                        @endif
+                    </div>
+
+                    <div class="text-xs text-slate-500">
+                        Tagihan: <span class="font-bold text-slate-700">{{ $payment->invoice?->invoice_number }}</span>
+                        @if($payment->invoice)
+                            &bull; Periode {{ $payment->invoice->period_label }}
+                        @endif
+                    </div>
+
+                    <div class="flex items-baseline justify-between pt-1 border-t border-slate-200">
+                        <div>
+                            <span class="text-[11px] text-slate-400 block">Nominal Transfer:</span>
+                            <span class="text-base font-black text-[#346733]">Rp {{ number_format($payment->amount, 0, ',', '.') }}</span>
+                        </div>
+                        <div class="text-right text-[11px] text-slate-500">
+                            <span>Tgl Bayar:</span>
+                            <span class="font-semibold text-slate-700 block">{{ $payment->payment_date ? $payment->payment_date->locale('id')->translatedFormat('d M Y') : '-' }}</span>
+                        </div>
+                    </div>
+
+                    <div class="text-[11px] text-slate-500 space-y-0.5 pt-1 border-t border-slate-100">
+                        <div>Tujuan: <strong class="text-slate-700">{{ $payment->bankAccount?->bank_name ?? 'BMT/Bank' }} - {{ $payment->bankAccount?->account_number ?? '-' }}</strong></div>
+                        @if($payment->sender_bank || $payment->sender_account_name)
+                            <div>Pengirim: <span class="text-slate-600">{{ $payment->sender_bank }} a/n {{ $payment->sender_account_name }}</span></div>
+                        @endif
+                    </div>
+
+                    <div class="pt-2 flex items-center justify-between border-t border-slate-200">
+                        <button type="button"
+                                @click.prevent="$dispatch('open-proof-modal', { url: '{{ $payment->proof_url }}', title: 'Bukti Transfer - {{ $payment->user->name }}' })"
+                                class="text-xs text-teal-700 font-bold underline cursor-pointer">
+                            Lihat Bukti Transfer
+                        </button>
+                        <a href="{{ route('admin.payments.show', $payment) }}" class="px-3 py-1.5 rounded-lg bg-[#346733] hover:bg-[#234622] text-white text-xs font-bold transition shadow-sm">
+                            Periksa &rarr;
+                        </a>
+                    </div>
+                </div>
+            @empty
+                <div class="text-center py-8 text-xs text-slate-400">
+                    Belum ada transaksi pembayaran yang tercatat pada kloter ini.
+                </div>
+            @endforelse
+        </div>
+
+        <!-- Desktop Table Format -->
+        <div class="overflow-x-auto hidden sm:block">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-gray-50 text-gray-500 text-xs uppercase font-semibold border-b border-gray-200">
+                    <tr>
+                        <th class="px-4 py-3.5">No</th>
+                        <th class="px-4 py-3.5">Tgl Bayar & Jam</th>
+                        <th class="px-4 py-3.5">Jama'ah / Pembayar</th>
+                        <th class="px-4 py-3.5">Tagihan & Periode</th>
+                        <th class="px-4 py-3.5">Rekening Tujuan</th>
+                        <th class="px-4 py-3.5">Nominal</th>
+                        <th class="px-4 py-3.5 text-center">Bukti Transfer</th>
+                        <th class="px-4 py-3.5 text-center">Status</th>
+                        <th class="px-4 py-3.5 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 text-xs">
+                    @forelse($payments as $index => $payment)
+                        <tr class="hover:bg-gray-50 transition">
+                            <td class="px-4 py-3.5 text-gray-400 font-mono">
+                                {{ $payments->firstItem() ? ($payments->firstItem() + $index) : ($index + 1) }}
+                            </td>
+                            <td class="px-4 py-3.5">
+                                <div class="font-bold text-gray-900">
+                                    {{ $payment->payment_date ? $payment->payment_date->locale('id')->translatedFormat('d M Y') : '-' }}
+                                </div>
+                                <div class="text-[11px] text-gray-400">
+                                    Input: {{ $payment->created_at->format('d/m/Y H:i') }}
+                                </div>
+                            </td>
+                            <td class="px-4 py-3.5">
+                                <div class="font-bold text-gray-900">{{ $payment->user->name }}</div>
+                                <div class="text-[11px] text-gray-500">{{ $payment->user->email }}</div>
+                                @if($payment->sender_bank || $payment->sender_account_name)
+                                    <div class="text-[11px] text-gray-400 mt-0.5">
+                                        Dari: {{ $payment->sender_bank }} a/n {{ $payment->sender_account_name }}
+                                    </div>
+                                @endif
+                            </td>
+                            <td class="px-4 py-3.5">
+                                <div class="font-semibold text-gray-900">{{ $payment->invoice?->invoice_number }}</div>
+                                <div class="text-[11px] text-emerald-700 font-medium">
+                                    {{ $payment->invoice ? 'Periode ' . $payment->invoice->period_label : '-' }}
+                                </div>
+                            </td>
+                            <td class="px-4 py-3.5">
+                                <div class="font-semibold text-gray-800">{{ $payment->bankAccount?->bank_name ?? 'Kas BMT' }}</div>
+                                <div class="text-[11px] text-gray-500 font-mono">{{ $payment->bankAccount?->account_number ?? '-' }}</div>
+                            </td>
+                            <td class="px-4 py-3.5 font-bold text-sm text-[#346733]">
+                                Rp {{ number_format($payment->amount, 0, ',', '.') }}
+                            </td>
+                            <td class="px-4 py-3.5 text-center">
+                                <button type="button"
+                                        @click.prevent="$dispatch('open-proof-modal', { url: '{{ $payment->proof_url }}', title: 'Bukti Transfer - {{ $payment->user->name }}' })"
+                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100 transition cursor-pointer">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                    <span>Bukti</span>
+                                </button>
+                            </td>
+                            <td class="px-4 py-3.5 text-center">
+                                @if($payment->isApproved())
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800">
+                                        Approved
+                                    </span>
+                                    @if($payment->verifier)
+                                        <div class="text-[10px] text-gray-400 mt-0.5">Oleh: {{ $payment->verifier->name }}</div>
+                                    @endif
+                                @elseif($payment->isPending())
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                                        Pending
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800">
+                                        Rejected
+                                    </span>
+                                @endif
+                            </td>
+                            <td class="px-4 py-3.5 text-center">
+                                <a href="{{ route('admin.payments.show', $payment) }}" class="inline-flex items-center px-3 py-1.5 rounded-lg bg-[#346733] hover:bg-[#234622] text-white text-xs font-bold transition shadow-sm">
+                                    Detail
+                                </a>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="9" class="px-6 py-8 text-center text-xs text-gray-500">
+                                Belum ada transaksi pembayaran yang tercatat pada kloter ini.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Paginasi Transaksi -->
+        @if($payments->hasPages())
+            <div class="p-4 border-t border-slate-100 bg-gray-50">
+                {{ $payments->links() }}
+            </div>
+        @endif
     </div>
 
     <!-- Modal Trigger Penagihan Khusus Kloter Ini -->
