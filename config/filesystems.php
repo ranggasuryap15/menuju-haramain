@@ -1,4 +1,12 @@
 <?php
+/**
+ * File: config/filesystems.php
+ * Tujuan: Konfigurasi driver filesystem Laravel (local, public, s3) dan symbolic links
+ * Dipakai Oleh: Storage facade, File uploads, dan penyajian asset public
+ * Dependensi Utama: Storage facade, env
+ * Daftar Komponen Utama: disks (local, public, s3), links
+ * Side Effect: Penentuan root direktori penyimpanan berkas aplikasi
+ */
 
 return [
 
@@ -33,7 +41,7 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+            'serve' => false,
             'throw' => false,
             'report' => false,
         ],

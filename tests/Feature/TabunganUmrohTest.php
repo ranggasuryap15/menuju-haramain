@@ -465,6 +465,14 @@ class TabunganUmrohTest extends TestCase
 
         // Invoice mendeteksi adanya pending payment
         $this->assertTrue($invoice->fresh()->hasPendingPayment());
+
+        $payment = Payment::where('invoice_id', $invoice->id)->first();
+        $this->assertNotNull($payment->proof_path);
+        $this->assertStringContainsString('storage/' . $payment->proof_path, $payment->proof_url);
+
+        // Verifikasi route fallback /storage/{path} menyajikan file bukti transfer dengan status 200
+        $fileResponse = $this->get('/storage/' . $payment->proof_path);
+        $fileResponse->assertStatus(200);
     }
 
     /**

@@ -96,6 +96,12 @@ class Payment extends Model
 
     public function getProofUrlAttribute(): string
     {
-        return Storage::disk('public')->url($this->proof_path);
+        if (empty($this->proof_path)) {
+            return '';
+        }
+
+        // Gunakan asset() agar selalu dinamis mengikuti domain aktif & protokol (HTTPS) request saat ini,
+        // mencegah broken image jika APP_URL di .env server masih http://localhost
+        return asset('storage/' . ltrim($this->proof_path, '/'));
     }
 }

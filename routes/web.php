@@ -1,10 +1,10 @@
 <?php
 /**
  * File: routes/web.php
- * Tujuan: Definisi rute web aplikasi Tabungan Umroh (Autentikasi guest, Portal Jamaah, Portal Admin Keuangan & Superadmin, Manajemen Tagihan, Manajemen Rekening Bank, Manajemen Pengguna)
+ * Tujuan: Definisi rute web aplikasi Tabungan Umroh (Autentikasi guest, Portal Jamaah, Portal Admin Keuangan & Superadmin, Manajemen Tagihan, Manajemen Rekening Bank, Manajemen Pengguna, Fallback Penyajian File Storage)
  * Dipakai Oleh: Laravel Routing Kernel
- * Dependensi Utama: AuthController, Jamaah\* Controllers, Admin\* Controllers, UserController
- * Daftar Rute Utama: /login, /register, /profile, /jamaah/*, /admin/*, /admin/invoices/*, /admin/bank-accounts/*, /admin/users/*
+ * Dependensi Utama: AuthController, Jamaah\* Controllers, Admin\* Controllers, UserController, Storage
+ * Daftar Rute Utama: /login, /register, /profile, /storage/*, /jamaah/*, /admin/*, /admin/invoices/*, /admin/bank-accounts/*, /admin/users/*
  * Side Effect: Penanganan HTTP request dan proteksi middleware guest, auth, serta role
  */
 
@@ -24,6 +24,7 @@ use App\Http\Controllers\Jamaah\KloterRegistrationController;
 use App\Http\Controllers\Jamaah\PaymentController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 
 // Redirect root ke dashboard atau login
 Route::get('/', function () {
@@ -120,3 +121,13 @@ Route::middleware(['auth', 'role:superadmin,admin_keuangan'])->prefix('admin')->
         Route::post('/{user}/role', [UserController::class, 'changeRole'])->name('change-role');
     });
 });
+
+// Fallback penyajian file storage publik (khusus jika symlink storage di server/shared hosting belum dibuat atau tidak didukung)
+Route::get('/storage/{path}', function (string $path) {
+    $disk = Storage::disk('public');
+    if (!$disk->exists($path)) {
+        abort(404);
+    }
+
+    return $disk->response($path);
+})->where('path', '.*')->name('storage.fallback');
