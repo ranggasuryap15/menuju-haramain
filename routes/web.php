@@ -1,10 +1,10 @@
 <?php
 /**
  * File: routes/web.php
- * Tujuan: Definisi rute web aplikasi Tabungan Umroh (Autentikasi guest, Portal Jamaah, Portal Admin Keuangan & Superadmin)
+ * Tujuan: Definisi rute web aplikasi Tabungan Umroh (Autentikasi guest, Portal Jamaah, Portal Admin Keuangan & Superadmin, Manajemen Pengguna)
  * Dipakai Oleh: Laravel Routing Kernel
- * Dependensi Utama: AuthController, Jamaah\* Controllers, Admin\* Controllers
- * Daftar Rute Utama: /login, /register (guest), /profile, /jamaah/*, /admin/*
+ * Dependensi Utama: AuthController, Jamaah\* Controllers, Admin\* Controllers, UserController
+ * Daftar Rute Utama: /login, /register, /profile, /jamaah/*, /admin/*, /admin/users/*
  * Side Effect: Penanganan HTTP request dan proteksi middleware guest, auth, serta role
  */
 
@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\KloterController;
 use App\Http\Controllers\Admin\PaymentApprovalController;
 use App\Http\Controllers\Admin\RegistrationApprovalController;
+use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Jamaah\DashboardController as JamaahDashboardController;
@@ -96,4 +97,15 @@ Route::middleware(['auth', 'role:superadmin,admin_keuangan'])->prefix('admin')->
     Route::get('/kloters/{kloter}/edit', [KloterController::class, 'edit'])->name('kloters.edit');
     Route::put('/kloters/{kloter}', [KloterController::class, 'update'])->name('kloters.update');
     Route::post('/kloters/trigger-billing', [KloterController::class, 'triggerBilling'])->name('kloters.trigger-billing');
+
+    // Manajemen Pengguna (Khusus Superadmin: Data Jama'ah & Data Admin)
+    Route::middleware(['role:superadmin'])->prefix('users')->name('users.')->group(function () {
+        Route::get('/jamaah', [UserController::class, 'jamaahIndex'])->name('jamaah');
+        Route::post('/jamaah', [UserController::class, 'storeJamaah'])->name('jamaah.store');
+        Route::get('/admins', [UserController::class, 'adminIndex'])->name('admins');
+        Route::post('/admins', [UserController::class, 'storeAdmin'])->name('admin.store');
+        Route::put('/{user}', [UserController::class, 'update'])->name('update');
+        Route::put('/{user}/reset-password', [UserController::class, 'resetPassword'])->name('reset-password');
+        Route::post('/{user}/role', [UserController::class, 'changeRole'])->name('change-role');
+    });
 });

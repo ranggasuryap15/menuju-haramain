@@ -28,6 +28,9 @@
  *   - test_kloter_can_have_distinct_bank_accounts_and_displayed_on_invoice()
  *   - test_kloter_code_is_always_persisted_and_retrieved_in_uppercase()
  *   - test_late_joining_jamaah_billing_and_final_month_catchup_settlement()
+ *   - test_superadmin_user_management_access_control()
+ *   - test_superadmin_can_create_edit_and_reset_password_for_jamaah_and_admin()
+ *   - test_superadmin_can_promote_and_demote_user_roles_with_security_guards()
  * Side Effect: Database read/write dalam transaction rollback
  */
 
@@ -1795,6 +1798,159 @@ class TabunganUmrohTest extends TestCase
         $dashboardResponse->assertStatus(200);
         $dashboardResponse->assertSee('Pendaftaran Susulan (Bergabung di Tengah Periode Kloter)');
         $dashboardResponse->assertSee('14.000.000');
+    }
+
+    /**
+     * Uji hak akses otorisasi untuk menu Data Jama'ah & Data Admin:
+     * Hanya Superadmin yang boleh mengakses rute /admin/users/*
+     */
+    public function test_superadmin_user_management_access_control()
+    {
+        $superadmin = User::where('role', 'superadmin')->first()
+            ?: User::factory()->create(['role' => 'superadmin', 'email' => 'super@test.com']);
+        $adminKeuangan = User::factory()->create(['role' => 'admin_keuangan']);
+        $jamaah = User::factory()->create(['role' => 'jamaah']);
+
+        // 1. Jamaah mencoba akses -> 403 Forbidden
+        $this->actingAs($jamaah)->get(route('admin.users.jamaah'))->assertStatus(403);
+        $this->actingAs($jamaah)->get(route('admin.users.admins'))->assertStatus(403);
+
+        // 2. Admin Keuangan mencoba akses -> 403 Forbidden
+        $this->actingAs($adminKeuangan)->get(route('admin.users.jamaah'))->assertStatus(403);
+        $this->actingAs($adminKeuangan)->get(route('admin.users.admins'))->assertStatus(403);
+
+        // 3. Superadmin mengakses -> 200 OK
+        $responseJamaah = $this->actingAs($superadmin)->get(route('admin.users.jamaah'));
+        $responseJamaah->assertStatus(200);
+        $responseJamaah->assertSee('Data Jamaah Umroh');
+
+        $responseAdmin = $this->actingAs($superadmin)->get(route('admin.users.admins'));
+        $responseAdmin->assertStatus(200);
+        $responseAdmin->assertSee('Data Staf Administrator');
+    }
+
+    /**
+     * Uji alur pembuatan akun baru oleh Superadmin, edit data, dan reset password
+     */
+    public function test_superadmin_can_create_edit_and_reset_password_for_jamaah_and_admin()
+    {
+        $superadmin = User::where('role', 'superadmin')->first()
+            ?: User::factory()->create(['role' => 'superadmin', 'email' => 'super@test.com']);
+
+        // 1. Superadmin membuat akun Jama'ah baru
+        $storeJamaahResponse = $this->actingAs($superadmin)->post(route('admin.users.jamaah.store'), [
+            'name' => 'Budi Santoso Jamaah',
+            'email' => 'budi.santoso@menujuharamain.test',
+            'phone' => '081233445566',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+        $storeJamaahResponse->assertRedirect(route('admin.users.jamaah'));
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'budi.santoso@menujuharamain.test',
+            'role' => 'jamaah',
+        ]);
+
+        $createdJamaah = User::where('email', 'budi.santoso@menujuharamain.test')->first();
+        $this->assertNotNull($createdJamaah);
+
+        // Pastikan entri FamilyMember Kepala Keluarga otomatis tercipta
+        $this->assertDatabaseHas('family_members', [
+            'user_id' => $createdJamaah->id,
+            'full_name' => 'Budi Santoso Jamaah',
+            'relationship' => 'Kepala Keluarga',
+        ]);
+
+        // 2. Superadmin membuat akun Admin Keuangan baru
+        $storeAdminResponse = $this->actingAs($superadmin)->post(route('admin.users.admin.store'), [
+            'name' => 'Siti Admin Keuangan',
+            'email' => 'siti.keuangan@menujuharamain.test',
+            'phone' => '081299887766',
+            'role' => 'admin_keuangan',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+        $storeAdminResponse->assertRedirect(route('admin.users.admins'));
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'siti.keuangan@menujuharamain.test',
+            'role' => 'admin_keuangan',
+        ]);
+        $createdAdmin = User::where('email', 'siti.keuangan@menujuharamain.test')->first();
+
+        // 3. Superadmin mengedit data jamaah
+        $updateResponse = $this->actingAs($superadmin)->put(route('admin.users.update', $createdJamaah), [
+            'name' => 'Budi Santoso Update',
+            'email' => 'budi.updated@menujuharamain.test',
+            'phone' => '081200001111',
+        ]);
+        $updateResponse->assertRedirect(route('admin.users.jamaah'));
+        $this->assertEquals('Budi Santoso Update', $createdJamaah->fresh()->name);
+        $this->assertEquals('budi.updated@menujuharamain.test', $createdJamaah->fresh()->email);
+
+        // 4. Superadmin mereset password jamaah
+        $resetResponse = $this->actingAs($superadmin)->put(route('admin.users.reset-password', $createdJamaah), [
+            'password' => 'newSecretPassword99',
+            'password_confirmation' => 'newSecretPassword99',
+        ]);
+        $resetResponse->assertRedirect(route('admin.users.jamaah'));
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('newSecretPassword99', $createdJamaah->fresh()->password));
+
+        // 5. Superadmin mereset password admin
+        $resetAdminResponse = $this->actingAs($superadmin)->put(route('admin.users.reset-password', $createdAdmin), [
+            'password' => 'adminNewPassword88',
+            'password_confirmation' => 'adminNewPassword88',
+        ]);
+        $resetAdminResponse->assertRedirect(route('admin.users.admins'));
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('adminNewPassword88', $createdAdmin->fresh()->password));
+    }
+
+    /**
+     * Uji fitur pengubahan peran (Role Switch):
+     * - Superadmin dapat mengangkat jamaah menjadi admin_keuangan
+     * - Superadmin dapat melepas admin_keuangan menjadi jamaah
+     * - Guard proteksi: Tidak bisa mengubah role diri sendiri atau akun superadmin
+     */
+    public function test_superadmin_can_promote_and_demote_user_roles_with_security_guards()
+    {
+        $superadmin = User::where('role', 'superadmin')->first()
+            ?: User::factory()->create(['role' => 'superadmin', 'email' => 'super@test.com']);
+
+        $userCalonAdmin = User::factory()->create([
+            'name' => 'Ahmad Calon Admin',
+            'email' => 'ahmad.calon@test.com',
+            'role' => 'jamaah',
+        ]);
+
+        // 1. Promosikan Jama'ah menjadi Admin Keuangan
+        $promoteResponse = $this->actingAs($superadmin)->post(route('admin.users.change-role', $userCalonAdmin), [
+            'target_role' => 'admin_keuangan',
+        ]);
+        $promoteResponse->assertRedirect(route('admin.users.admins'));
+        $this->assertEquals('admin_keuangan', $userCalonAdmin->fresh()->role);
+
+        // 2. Lepas Admin Keuangan kembali menjadi Jama'ah biasa
+        $demoteResponse = $this->actingAs($superadmin)->post(route('admin.users.change-role', $userCalonAdmin), [
+            'target_role' => 'jamaah',
+        ]);
+        $demoteResponse->assertRedirect(route('admin.users.jamaah'));
+        $this->assertEquals('jamaah', $userCalonAdmin->fresh()->role);
+
+        // 3. Security Guard: Superadmin tidak boleh mengubah role akunnya sendiri
+        $selfChangeResponse = $this->actingAs($superadmin)->post(route('admin.users.change-role', $superadmin), [
+            'target_role' => 'jamaah',
+        ]);
+        $selfChangeResponse->assertSessionHas('error', 'Anda tidak dapat mengubah hak akses akun Anda sendiri.');
+        $this->assertEquals('superadmin', $superadmin->fresh()->role);
+
+        // 4. Security Guard: Akun Superadmin lain tidak boleh diubah
+        $anotherSuperadmin = User::factory()->create(['role' => 'superadmin']);
+        $changeSuperResponse = $this->actingAs($superadmin)->post(route('admin.users.change-role', $anotherSuperadmin), [
+            'target_role' => 'jamaah',
+        ]);
+        $changeSuperResponse->assertSessionHas('error', 'Hak akses akun Superadmin tidak dapat diubah.');
+        $this->assertEquals('superadmin', $anotherSuperadmin->fresh()->role);
     }
 }
 

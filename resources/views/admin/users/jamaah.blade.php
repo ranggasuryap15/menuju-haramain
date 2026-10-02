@@ -34,7 +34,7 @@ Side Effect: Form submit POST /admin/users/jamaah, PUT /admin/users/{user}, PUT 
     <!-- Header & Keterangan -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
-            <h1 class="text-xl sm:text-2xl font-black text-slate-900">Data Jama'ah Umroh</h1>
+            <h1 class="text-xl sm:text-2xl font-black text-slate-900">Data Jamaah Umroh</h1>
             <p class="text-xs sm:text-sm text-slate-500">
                 Kelola seluruh data jama'ah terdaftar, buat akun baru, atur ulang kata sandi, dan kelola hak akses.
             </p>
