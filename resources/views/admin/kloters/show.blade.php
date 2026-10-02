@@ -39,16 +39,16 @@
             </h1>
         </div>
 
-        <div class="flex items-center gap-3">
-            <button type="button" @click="showTriggerModal = true" class="inline-flex items-center gap-1.5 px-4 py-2 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 shadow-sm transition cursor-pointer">
-                <svg class="w-4 h-4 text-[#007C6A]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                <span>Generate Tagihan Kloter</span>
+        <div class="flex items-center gap-2 sm:gap-3">
+            <button type="button" @click="showTriggerModal = true" class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:px-4 sm:py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 rounded-xl text-xs sm:text-sm font-bold shadow-xs transition cursor-pointer">
+                <svg class="w-4 h-4 text-[#007C6A] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                <span class="whitespace-nowrap">Generate Tagihan</span>
             </button>
-            <a href="{{ route('admin.kloters.edit', $kloter) }}" class="inline-flex items-center gap-1.5 px-4 py-2 bg-[#346733] hover:bg-[#234622] text-white rounded-xl text-sm font-semibold shadow-sm transition">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                <span>Edit Kloter</span>
+            <a href="{{ route('admin.kloters.edit', $kloter) }}" class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:px-4 sm:py-2 bg-[#346733] hover:bg-[#234622] text-white rounded-xl text-xs sm:text-sm font-bold shadow-xs transition">
+                <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                <span class="whitespace-nowrap">Edit Kloter</span>
             </a>
-            <a href="{{ route('admin.kloters.index') }}" class="px-4 py-2 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition">
+            <a href="{{ route('admin.kloters.index') }}" class="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">
                 Kembali
             </a>
         </div>
