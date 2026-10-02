@@ -39,6 +39,7 @@
  *   - test_admin_and_superadmin_can_update_bank_account_details_and_add_new_bank()
  *   - test_superadmin_can_delete_jamaah_with_cascade_and_storage_cleanup()
  *   - test_kloter_whatsapp_group_url_management_and_payment_wa_reminder()
+ *   - test_jamaah_invoice_tabs_and_sorting_unpaid_asc_paid_desc()
  * Side Effect: Database read/write dalam transaction rollback
  */
 
@@ -58,6 +59,7 @@ use App\Services\PaymentService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -2368,8 +2370,11 @@ class TabunganUmrohTest extends TestCase
         // INV-MON-003 yang sudah lunas tidak muncul pada filter default all_unpaid
         $superadminResponse->assertDontSee('INV-MON-003');
 
-        // Total piutang belum lunas = 1jt (INV-1) + 700rb (INV-2) = 1.700.000
-        $superadminResponse->assertSee('Rp 1.700.000');
+        // Total piutang belum lunas agregat global statistik
+        $expectedGlobalUnpaid = 'Rp ' . number_format(Invoice::where('status', '!=', Invoice::STATUS_PAID)->whereColumn('paid_amount', '<', 'total_amount')->sum(DB::raw('total_amount - paid_amount')), 0, ',', '.');
+        $superadminResponse->assertSee($expectedGlobalUnpaid);
+        $superadminResponse->assertSee('Rp 1.000.000');
+        $superadminResponse->assertSee('Rp 700.000');
 
         // 3. Admin Keuangan juga dapat mengakses
         $keuanganResponse = $this->actingAs($adminKeuangan)->get(route('admin.invoices.index'));
@@ -2733,6 +2738,118 @@ class TabunganUmrohTest extends TestCase
         $invoiceShowResponse->assertSee('Kirim Reminder ke WA Admin');
         $invoiceShowResponse->assertSee('wa.me/6281234567890', false);
         $invoiceShowResponse->assertSee('https://chat.whatsapp.com/NewGroupLink123456');
+    }
+
+    /**
+     * Test pemisahan tab tagihan antara belum dibayar (urutan ASC) dan sudah dibayar (urutan DESC)
+     */
+    public function test_jamaah_invoice_tabs_and_sorting_unpaid_asc_paid_desc(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_JAMAAH]);
+        $family = FamilyMember::create([
+            'user_id' => $user->id,
+            'full_name' => 'Fulan bin Fulan',
+            'relationship' => 'self',
+            'identity_number' => '3201123456789001',
+            'gender' => 'L',
+            'birth_date' => '1990-01-01',
+        ]);
+
+        $kloter = Kloter::create([
+            'code' => 'TAB-SORT',
+            'name' => 'Kloter Tab Sorting Test',
+            'start_date' => '2025-11-01',
+            'end_date' => '2026-12-01',
+            'target_per_pax' => 30000000,
+            'monthly_per_pax' => 3000000,
+            'status' => 'active',
+        ]);
+
+        $reg = KloterRegistration::create([
+            'user_id' => $user->id,
+            'kloter_id' => $kloter->id,
+            'status' => KloterRegistration::STATUS_ACTIVE,
+            'total_target' => 30000000,
+            'accumulated_savings' => 6000000,
+        ]);
+
+        // 2 Invoice Belum Lunas (Januari & Februari 2026)
+        $invUnpaidJan = Invoice::create([
+            'registration_id' => $reg->id,
+            'invoice_number' => 'INV-UNPAID-01-JAN',
+            'billing_year' => 2026,
+            'billing_month' => 1,
+            'billing_date' => Carbon::create(2026, 1, 1),
+            'due_date' => Carbon::create(2026, 1, 10),
+            'total_amount' => 3000000,
+            'paid_amount' => 0,
+            'status' => Invoice::STATUS_UNPAID,
+        ]);
+
+        $invUnpaidFeb = Invoice::create([
+            'registration_id' => $reg->id,
+            'invoice_number' => 'INV-UNPAID-02-FEB',
+            'billing_year' => 2026,
+            'billing_month' => 2,
+            'billing_date' => Carbon::create(2026, 2, 1),
+            'due_date' => Carbon::create(2026, 2, 10),
+            'total_amount' => 3000000,
+            'paid_amount' => 0,
+            'status' => Invoice::STATUS_UNPAID,
+        ]);
+
+        // 2 Invoice Sudah Lunas (November & Desember 2025)
+        $invPaidNov = Invoice::create([
+            'registration_id' => $reg->id,
+            'invoice_number' => 'INV-PAID-11-NOV',
+            'billing_year' => 2025,
+            'billing_month' => 11,
+            'billing_date' => Carbon::create(2025, 11, 1),
+            'due_date' => Carbon::create(2025, 11, 10),
+            'total_amount' => 3000000,
+            'paid_amount' => 3000000,
+            'status' => Invoice::STATUS_PAID,
+        ]);
+
+        $invPaidDec = Invoice::create([
+            'registration_id' => $reg->id,
+            'invoice_number' => 'INV-PAID-12-DEC',
+            'billing_year' => 2025,
+            'billing_month' => 12,
+            'billing_date' => Carbon::create(2025, 12, 1),
+            'due_date' => Carbon::create(2025, 12, 10),
+            'total_amount' => 3000000,
+            'paid_amount' => 3000000,
+            'status' => Invoice::STATUS_PAID,
+        ]);
+
+        // 1. Uji Akses Tab Default / Belum Dibayar (Urutan ASC: Januari dulu, lalu Februari)
+        $unpaidResponse = $this->actingAs($user)->get(route('jamaah.invoices.index'));
+        $unpaidResponse->assertStatus(200);
+        $unpaidResponse->assertSee('INV-UNPAID-01-JAN');
+        $unpaidResponse->assertSee('INV-UNPAID-02-FEB');
+        $unpaidResponse->assertDontSee('INV-PAID-11-NOV');
+        $unpaidResponse->assertDontSee('INV-PAID-12-DEC');
+
+        // Pastikan invoice Januari muncul sebelum invoice Februari (Ascending)
+        $unpaidContent = $unpaidResponse->getContent();
+        $posJan = strpos($unpaidContent, 'INV-UNPAID-01-JAN');
+        $posFeb = strpos($unpaidContent, 'INV-UNPAID-02-FEB');
+        $this->assertTrue($posJan !== false && $posFeb !== false && $posJan < $posFeb, 'Tagihan belum bayar harus diurutkan secara Ascending (bulan terlama/pertama di atas).');
+
+        // 2. Uji Akses Tab Sudah Dibayar (Urutan DESC: Desember 2025 dulu, lalu November 2025)
+        $paidResponse = $this->actingAs($user)->get(route('jamaah.invoices.index', ['tab' => 'paid']));
+        $paidResponse->assertStatus(200);
+        $paidResponse->assertSee('INV-PAID-12-DEC');
+        $paidResponse->assertSee('INV-PAID-11-NOV');
+        $paidResponse->assertDontSee('INV-UNPAID-01-JAN');
+        $paidResponse->assertDontSee('INV-UNPAID-02-FEB');
+
+        // Pastikan invoice Desember muncul sebelum invoice November (Descending)
+        $paidContent = $paidResponse->getContent();
+        $posDec = strpos($paidContent, 'INV-PAID-12-DEC');
+        $posNov = strpos($paidContent, 'INV-PAID-11-NOV');
+        $this->assertTrue($posDec !== false && $posNov !== false && $posDec < $posNov, 'Tagihan sudah lunas harus diurutkan secara Descending (periode terbaru di atas).');
     }
 }
 

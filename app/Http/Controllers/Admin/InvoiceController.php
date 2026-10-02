@@ -84,10 +84,13 @@ class InvoiceController extends Controller
             });
         }
 
-        $invoices = $query->orderBy('billing_date', 'desc')
-            ->orderBy('id', 'desc')
-            ->paginate(15)
-            ->withQueryString();
+        if ($status === 'paid') {
+            $query->orderBy('billing_date', 'desc')->orderBy('id', 'desc');
+        } else {
+            $query->orderBy('billing_date', 'asc')->orderBy('id', 'asc');
+        }
+
+        $invoices = $query->paginate(15)->withQueryString();
 
         // Agregasi statistik ringkasan tagihan belum lunas
         $unpaidBase = Invoice::query()
