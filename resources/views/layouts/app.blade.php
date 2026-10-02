@@ -1,10 +1,10 @@
 <!--
 File: resources/views/layouts/app.blade.php
-Tujuan: Master layout responsif hybrid: Desktop Sidebar kiri, Dropdown Profil Akun topbar, Mobile Bottom Nav Bar, Mobile Slide-over Drawer dengan click-outside auto-collapse, Modal Pusat Notifikasi Interaktif, dan Global Ergonomic Form Field Styles
+Tujuan: Master layout responsif hybrid: Desktop Sidebar kiri, Dropdown Profil Akun topbar, Mobile Bottom Nav Bar, Mobile Slide-over Drawer dengan click-outside auto-collapse, Modal Pusat Notifikasi Interaktif, Global Ergonomic Form Field Styles, PWA Manifest & Service Worker Integration, serta Mandatory PWA Installation Guard (wajib install untuk akses dashboard)
 Dipakai Oleh: Seluruh view aplikasi (Portal Jamaah dan Portal Admin)
-Dependensi Utama: Tailwind CSS CDN, Alpine.js CDN, Google Fonts (Plus Jakarta Sans), App\Services\NotificationService, App\Models\Payment, App\Models\KloterRegistration
-Daftar Komponen Utama: Desktop Sidebar (lg:flex), Desktop Topbar dengan Dropdown Profil & Tombol Notifikasi, Mobile Topbar dengan Tombol Notifikasi & Burger Button, Mobile Bottom Bar, Mobile Account Drawer, Modal Pusat Notifikasi & Antrean Interaktif, Global Form Inputs CSS, Main Content Container, Footer
-Side Effect: Render HTML shell, navigasi antarmuka, modal notifikasi real-time, dan standar visual input form
+Dependensi Utama: Tailwind CSS CDN, Alpine.js CDN, Google Fonts (Plus Jakarta Sans), App\Services\NotificationService, PWA (manifest.json, sw.js)
+Daftar Komponen Utama: Desktop Sidebar (lg:flex), Desktop Topbar dengan Dropdown Profil & Tombol Notifikasi, Mobile Topbar dengan Tombol Notifikasi & Burger Button, Mobile Bottom Bar, Mobile Account Drawer, Modal Pusat Notifikasi & Antrean Interaktif, Global Form Inputs CSS, Mandatory PWA Installation Overlay Guard, Main Content Container, Footer, Proof Modal Viewer
+Side Effect: Render HTML shell, navigasi antarmuka, modal notifikasi real-time, standar visual input form, dan pemblokiran akses browser sebelum aplikasi terinstall (PWA standalone mode)
 -->
 <!DOCTYPE html>
 <html lang="id" class="h-full bg-slate-50">
@@ -13,6 +13,17 @@ Side Effect: Render HTML shell, navigasi antarmuka, modal notifikasi real-time, 
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Menuju Haramain') - Tabungan Umroh Terencana</title>
+
+    <!-- PWA Configuration & Icons -->
+    <link rel="manifest" href="{{ asset('manifest.json') }}">
+    <meta name="theme-color" content="#346733">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Menuju Haramain">
+    <link rel="apple-touch-icon" href="{{ asset('icons/icon-192.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ asset('icons/icon-192.png') }}">
+    <link rel="shortcut icon" href="{{ asset('icons/icon-192.png') }}">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -156,6 +167,152 @@ Side Effect: Render HTML shell, navigasi antarmuka, modal notifikasi real-time, 
             $pendingPaymentsCount = $notificationsData['approval_payments_count'] ?? ($isStaff ? \App\Models\Payment::where('status', 'pending')->count() : 0);
             $pendingRegistrationsCount = $notificationsData['approval_registrations_count'] ?? ($isStaff ? \App\Models\KloterRegistration::where('status', \App\Models\KloterRegistration::STATUS_PENDING)->count() : 0);
         @endphp
+
+        <!-- ========================================================================= -->
+        <!-- MANDATORY PWA INSTALLATION GUARD (WAJIB INSTALL UNTUK AKSES DASHBOARD)    -->
+        <!-- Tampil memblokir layar jika aplikasi dibuka dari tab browser biasa        -->
+        <!-- ========================================================================= -->
+        <div x-data="pwaInstallGuard()"
+             x-cloak
+             x-show="!isStandalone"
+             class="fixed inset-0 z-[9999] overflow-y-auto bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+             aria-modal="true" role="dialog">
+            
+            <div class="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-white/20 overflow-hidden text-center my-auto transition-all transform scale-100">
+                
+                <!-- Header Banner -->
+                <div class="bg-gradient-to-r from-[#346733] to-[#234622] p-6 text-white text-center relative overflow-hidden">
+                    <div class="absolute -right-8 -bottom-8 w-28 h-28 rounded-full bg-[#D4AF37]/20 pointer-events-none"></div>
+                    <div class="w-16 h-16 mx-auto rounded-2xl bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center text-[#D4AF37] mb-3 shadow-inner">
+                        <svg class="w-9 h-9 fill-current" viewBox="0 0 24 24">
+                            <path d="M12 2L3 8v12h18V8L12 2zm0 3.2L18.4 9H5.6L12 5.2zM5 11h14v7H5v-7zm7 1.5c-1.38 0-2.5 1.12-2.5 2.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5-1.12-2.5-2.5-2.5z"/>
+                        </svg>
+                    </div>
+                    <h2 class="text-xl sm:text-2xl font-black tracking-tight">Menuju Haramain</h2>
+                    <p class="text-xs text-emerald-100/90 mt-1">Portal Tabungan & Angsuran Umroh Terencana</p>
+                </div>
+
+                <!-- Content Area -->
+                <div class="p-6 sm:p-7 space-y-5">
+                    <!-- Status Badge & Headline -->
+                    <div>
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-900 border border-amber-200 uppercase tracking-wider mb-2">
+                            <svg class="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                            <span>Instalasi Aplikasi Diwajibkan</span>
+                        </span>
+                        <h3 class="text-lg font-black text-slate-900">Aplikasi Belum Terpasang</h3>
+                        <p class="text-xs sm:text-sm text-slate-600 mt-1.5 leading-relaxed">
+                            Assalamu'alaikum, <strong>{{ auth()->user()->name }}</strong>. Untuk keamanan data tabungan umroh, proteksi transaksi, dan kenyamanan notifikasi tagihan, aplikasi ini <strong>wajib di-install</strong> di perangkat Anda (Chrome, Safari, atau browser lainnya) sebelum dapat melihat isi dashboard.
+                        </p>
+                    </div>
+
+                    <!-- State 1: Jika sudah berhasil terpasang via browser prompt -->
+                    <template x-if="isInstalled">
+                        <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-left space-y-2">
+                            <div class="flex items-center gap-2 font-bold text-sm text-emerald-800">
+                                <svg class="w-5 h-5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <span>Alhamdulillah, Aplikasi Berhasil Dipasang!</span>
+                            </div>
+                            <p class="text-xs text-emerald-700 leading-relaxed">
+                                Silakan tutup tab browser ini dan buka aplikasi <strong>Menuju Haramain</strong> langsung dari Layar Utama (Homescreen) atau daftar aplikasi perangkat Anda untuk melanjutkan ke dashboard.
+                            </p>
+                        </div>
+                    </template>
+
+                    <!-- State 2: Jika belum terpasang -->
+                    <template x-if="!isInstalled">
+                        <div class="space-y-4">
+                            <!-- Tombol Install Native (Chrome / Android / Chromium / Desktop) -->
+                            <template x-if="!isIos">
+                                <div class="space-y-3">
+                                    <button type="button"
+                                            @click="installPwa()"
+                                            class="w-full py-3.5 px-5 rounded-2xl bg-[#346733] hover:bg-[#234622] text-white font-extrabold text-sm shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]">
+                                        <svg class="w-5 h-5 text-[#D4AF37]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                        </svg>
+                                        <span>Pasang / Install Aplikasi Sekarang</span>
+                                    </button>
+
+                                    <!-- Petunjuk alternatif jika dialog native browser memerlukan aksi manual -->
+                                    <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-left text-xs text-slate-600 space-y-1.5">
+                                        <div class="font-bold text-slate-800 flex items-center gap-1.5">
+                                            <svg class="w-4 h-4 text-emerald-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                            <span>Panduan Pasang di Chrome / Edge / Browser Lain:</span>
+                                        </div>
+                                        <ol class="list-decimal list-inside space-y-1 text-slate-600 pl-1 text-[11px] sm:text-xs">
+                                            <li>Klik ikon <strong>Install (📥)</strong> pada address bar browser Anda, atau</li>
+                                            <li>Tekan menu titik tiga <strong>[⋮]</strong> di kanan atas &rarr; pilih <strong>"Instal Menuju Haramain"</strong>.</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Panduan Khusus Safari (iOS / iPadOS) -->
+                            <template x-if="isIos || isSafari">
+                                <div class="p-4 rounded-2xl bg-amber-50/80 border border-amber-200 text-left text-xs text-slate-700 space-y-2.5">
+                                    <div class="font-bold text-amber-950 flex items-center gap-1.5 text-xs">
+                                        <svg class="w-4 h-4 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                        <span>Panduan Pasang di Safari (iPhone / iPad / Mac):</span>
+                                    </div>
+                                    <div class="space-y-2 text-[11px] sm:text-xs leading-relaxed text-slate-700">
+                                        <div class="flex items-start gap-2">
+                                            <span class="w-5 h-5 rounded-full bg-amber-200 text-amber-900 font-extrabold flex items-center justify-center shrink-0 text-[10px]">1</span>
+                                            <span>Ketuk tombol <strong>Bagikan (Share)</strong>
+                                                <svg class="inline w-4 h-4 text-blue-600 align-text-bottom mx-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+                                                </svg> di bilah alat Safari.
+                                            </span>
+                                        </div>
+                                        <div class="flex items-start gap-2">
+                                            <span class="w-5 h-5 rounded-full bg-amber-200 text-amber-900 font-extrabold flex items-center justify-center shrink-0 text-[10px]">2</span>
+                                            <span>Gulir ke bawah lalu pilih <strong>"Tambahkan ke Layar Utama" / "Add to Home Screen"</strong> (+).</span>
+                                        </div>
+                                        <div class="flex items-start gap-2">
+                                            <span class="w-5 h-5 rounded-full bg-amber-200 text-amber-900 font-extrabold flex items-center justify-center shrink-0 text-[10px]">3</span>
+                                            <span>Ketuk <strong>"Tambah" / "Add"</strong> di pojok kanan atas layar.</span>
+                                        </div>
+                                        <div class="flex items-start gap-2">
+                                            <span class="w-5 h-5 rounded-full bg-amber-200 text-amber-900 font-extrabold flex items-center justify-center shrink-0 text-[10px]">4</span>
+                                            <span>Buka aplikasi <strong>Menuju Haramain</strong> dari Layar Utama ponsel Anda untuk langsung melihat isi dashboard.</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <!-- Tombol Verifikasi Ulang -->
+                    <div class="space-y-3 pt-2">
+                        <button type="button"
+                                @click="checkStandalone(true)"
+                                class="w-full py-2.5 px-4 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+                            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            <span>Saya Sudah Pasang / Periksa Ulang Status</span>
+                        </button>
+
+                        <!-- Logout link -->
+                        <div class="pt-2 border-t border-slate-100">
+                            <form action="{{ route('logout') }}" method="POST">
+                                @csrf
+                                <button type="submit" class="text-xs font-semibold text-red-600 hover:underline inline-flex items-center gap-1 cursor-pointer">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                                    <span>Keluar dari Akun (Logout)</span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
 
         <!-- ========================================================================= -->
         <!-- 1. DESKTOP SIDEBAR (Tampil hanya di layar Desktop lg: ke atas)            -->
@@ -1016,6 +1173,93 @@ Side Effect: Render HTML shell, navigasi antarmuka, modal notifikasi real-time, 
                     this.isZoomed = !this.isZoomed;
                 }
             }
+        }
+
+        function pwaInstallGuard() {
+            return {
+                isStandalone: false,
+                deferredPrompt: null,
+                isIos: false,
+                isSafari: false,
+                isInstalled: false,
+
+                init() {
+                    this.detectPlatform();
+                    this.checkStandalone();
+
+                    // Tangkap prompt instalasi PWA pada browser berbasis Chromium
+                    window.addEventListener('beforeinstallprompt', (e) => {
+                        e.preventDefault();
+                        this.deferredPrompt = e;
+                    });
+
+                    // Tangkap event ketika aplikasi selesai di-install
+                    window.addEventListener('appinstalled', () => {
+                        this.deferredPrompt = null;
+                        this.isInstalled = true;
+                    });
+
+                    // Dengarkan perubahan display-mode jika pengguna berpindah ke jendela standalone
+                    const mql = window.matchMedia('(display-mode: standalone)');
+                    if (mql && mql.addEventListener) {
+                        mql.addEventListener('change', (e) => {
+                            if (e.matches) {
+                                this.isStandalone = true;
+                            }
+                        });
+                    }
+                },
+
+                checkStandalone(isManualCheck = false) {
+                    const isStandaloneMedia = window.matchMedia('(display-mode: standalone)').matches;
+                    const isFullscreen = window.matchMedia('(display-mode: fullscreen)').matches;
+                    const isMinimalUi = window.matchMedia('(display-mode: minimal-ui)').matches;
+                    const isNavigatorStandalone = ('standalone' in window.navigator) && (window.navigator.standalone === true);
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const hasPwaParam = urlParams.get('source') === 'pwa' || urlParams.get('mode') === 'standalone';
+
+                    if (hasPwaParam) {
+                        try { sessionStorage.setItem('pwa_mode', 'true'); } catch (e) {}
+                    }
+                    const isStoredPwa = (function() {
+                        try { return sessionStorage.getItem('pwa_mode') === 'true'; } catch (e) { return false; }
+                    })();
+
+                    this.isStandalone = isStandaloneMedia || isFullscreen || isMinimalUi || isNavigatorStandalone || hasPwaParam || isStoredPwa;
+
+                    if (isManualCheck && !this.isStandalone) {
+                        alert('Aplikasi belum terdeteksi dibuka dalam mode terpasang (standalone). Pastikan Anda membuka Menuju Haramain dari ikon di Layar Utama (Homescreen) atau Desktop Anda.');
+                    }
+                },
+
+                detectPlatform() {
+                    const ua = window.navigator.userAgent.toLowerCase();
+                    this.isIos = /iphone|ipad|ipod/.test(ua);
+                    this.isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+                },
+
+                async installPwa() {
+                    if (this.deferredPrompt) {
+                        this.deferredPrompt.prompt();
+                        const { outcome } = await this.deferredPrompt.userChoice;
+                        if (outcome === 'accepted') {
+                            this.isInstalled = true;
+                        }
+                        this.deferredPrompt = null;
+                    } else {
+                        alert('Silakan gunakan ikon Install (📥) di bilah alamat browser Anda atau menu browser [⋮] -> "Instal Menuju Haramain".');
+                    }
+                }
+            }
+        }
+
+        // Registrasi Service Worker PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js').catch(function(err) {
+                    console.warn('PWA SW registration failed:', err);
+                });
+            });
         }
     </script>
 

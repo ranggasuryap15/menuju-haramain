@@ -1,9 +1,9 @@
 <!--
 File: resources/views/jamaah/registrations/create.blade.php
-Tujuan: Halaman formulir pendaftaran akun jamaah dan pemilihan anggota keluarga ke kloter umroh tertentu
+Tujuan: Halaman formulir pendaftaran kloter umroh dan pemilihan anggota keluarga (mendukung pendaftaran baru maupun penambahan anggota keluarga yang belum terdaftar ke kloter yang sama)
 Dipakai Oleh: Jamaah\KloterRegistrationController@create (GET /jamaah/registrations/create)
-Dependensi Utama: layouts.app, Kloter, FamilyMember
-Daftar Komponen Utama: Pilihan kloter, Checkbox multi-select anggota keluarga, Kalkulator ringkasan tagihan bulanan
+Dependensi Utama: layouts.app, Kloter, FamilyMember, Alpine.js
+Daftar Komponen Utama: Pilihan paket kloter (status terdaftar per anggota), Checkbox pemilihan anggota keluarga (auto-disable jika sudah terdaftar di kloter yang dipilih), Kalkulator ringkasan tagihan bulanan dinamis
 Side Effect: POST ke /jamaah/registrations
 -->
 @extends('layouts.app')
@@ -31,11 +31,33 @@ Side Effect: POST ke /jamaah/registrations
     @else
         <form action="{{ route('jamaah.registrations.store') }}" method="POST" class="space-y-6"
             x-data="{
+                selectedKloterId: null,
                 selectedKloterMonthly: 0,
                 selectedKloterTarget: 0,
                 selectedPaxCount: 0,
+                registeredMembersMap: {{ json_encode($kloterRegisteredMemberIds) }},
+                isMemberRegistered(memberId) {
+                    if (!this.selectedKloterId || !this.registeredMembersMap[this.selectedKloterId]) {
+                        return false;
+                    }
+                    return this.registeredMembersMap[this.selectedKloterId].includes(memberId);
+                },
+                onKloterSelected(kloterId, monthly, target) {
+                    this.selectedKloterId = kloterId;
+                    this.selectedKloterMonthly = monthly;
+                    this.selectedKloterTarget = target;
+                    this.$nextTick(() => {
+                        document.querySelectorAll('input[name=\'family_member_ids[]\']').forEach(cb => {
+                            let memberId = parseInt(cb.value, 10);
+                            if (this.isMemberRegistered(memberId)) {
+                                cb.checked = false;
+                            }
+                        });
+                        this.updateCounts();
+                    });
+                },
                 updateCounts() {
-                    let checkboxes = document.querySelectorAll('input[name=\'family_member_ids[]\']:checked');
+                    let checkboxes = document.querySelectorAll('input[name=\'family_member_ids[]\']:checked:not(:disabled)');
                     this.selectedPaxCount = checkboxes.length;
                 }
             }">
@@ -52,21 +74,25 @@ Side Effect: POST ke /jamaah/registrations
                 <div class="space-y-3">
                     @forelse($kloters as $k)
                         @php
-                            $isRegistered = in_array($k->id, $registeredKloterIds, true);
+                            $registeredMemberIds = $kloterRegisteredMemberIds[$k->id] ?? [];
+                            $allMembersRegistered = count($registeredMemberIds) >= $familyMembers->count() && $familyMembers->count() > 0;
+                            $partiallyRegistered = count($registeredMemberIds) > 0 && !$allMembersRegistered;
                         @endphp
-                        <label class="block p-4 rounded-xl border-2 transition-all cursor-pointer {{ $isRegistered ? 'opacity-50 border-slate-200 bg-slate-50 cursor-not-allowed' : 'border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/20' }}">
+                        <label class="block p-4 rounded-xl border-2 transition-all cursor-pointer {{ $allMembersRegistered ? 'opacity-50 border-slate-200 bg-slate-50 cursor-not-allowed' : 'border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/20' }}">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="flex items-start space-x-3">
                                     <input type="radio" name="kloter_id" value="{{ $k->id }}" required
-                                        {{ $isRegistered ? 'disabled' : '' }}
-                                        @click="selectedKloterMonthly = {{ $k->monthly_per_pax }}; selectedKloterTarget = {{ $k->target_per_pax }}"
+                                        {{ $allMembersRegistered ? 'disabled' : '' }}
+                                        @click="onKloterSelected({{ $k->id }}, {{ $k->monthly_per_pax }}, {{ $k->target_per_pax }})"
                                         class="mt-1 w-4 h-4 text-[#346733] focus:ring-[#346733] border-slate-300">
                                     <div>
                                         <div class="flex items-center space-x-2">
                                             <span class="text-xs font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{{ $k->code }}</span>
                                             <h3 class="text-sm font-bold text-slate-900">{{ $k->name }}</h3>
-                                            @if($isRegistered)
-                                                <span class="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">Sudah Terdaftar</span>
+                                            @if($allMembersRegistered)
+                                                <span class="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">Semua Anggota Terdaftar</span>
+                                            @elseif($partiallyRegistered)
+                                                <span class="text-[10px] font-bold text-[#007C6A] bg-teal-50 border border-teal-200 px-2 py-0.5 rounded">{{ count($registeredMemberIds) }} Anggota Terdaftar</span>
                                             @endif
                                         </div>
                                         <p class="text-xs text-slate-500 mt-1">{{ $k->description }}</p>
@@ -106,17 +132,26 @@ Side Effect: POST ke /jamaah/registrations
 
                 <div class="space-y-2.5">
                     @foreach($familyMembers as $m)
-                        <label class="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-slate-50 cursor-pointer transition-colors">
+                        <label class="flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer"
+                            :class="isMemberRegistered({{ $m->id }}) 
+                                ? 'opacity-60 bg-slate-50 border-slate-200 cursor-not-allowed' 
+                                : 'border-slate-200 hover:border-emerald-300 hover:bg-slate-50'">
                             <div class="flex items-center space-x-3">
                                 <input type="checkbox" name="family_member_ids[]" value="{{ $m->id }}"
+                                    :disabled="isMemberRegistered({{ $m->id }})"
                                     @change="updateCounts()"
-                                    class="w-4 h-4 text-[#346733] rounded focus:ring-[#346733] border-slate-300">
+                                    class="w-4 h-4 text-[#346733] rounded focus:ring-[#346733] border-slate-300 disabled:opacity-40">
                                 <div>
-                                    <span class="block text-sm font-bold text-slate-800">{{ $m->full_name }}</span>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="block text-sm font-bold text-slate-800">{{ $m->full_name }}</span>
+                                        <span x-show="isMemberRegistered({{ $m->id }})" x-cloak class="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-200">
+                                            Sudah Terdaftar di Kloter Ini
+                                        </span>
+                                    </div>
                                     <span class="block text-xs text-slate-500">{{ $m->relationship }} &bull; NIK: {{ $m->identity_number ?: '-' }}</span>
                                 </div>
                             </div>
-                            <span class="text-xs font-semibold text-slate-400">Calon Jama'ah</span>
+                            <span class="text-xs font-semibold text-slate-400" x-text="isMemberRegistered({{ $m->id }}) ? 'Terdaftar' : 'Calon Jama\'ah'"></span>
                         </label>
                     @endforeach
                 </div>

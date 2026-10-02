@@ -59,6 +59,7 @@ Route::middleware(['auth'])->prefix('jamaah')->name('jamaah.')->group(function (
     // Manajemen Anggota Keluarga
     Route::get('/family', [FamilyMemberController::class, 'index'])->name('family.index');
     Route::post('/family', [FamilyMemberController::class, 'store'])->name('family.store');
+    Route::put('/family/{familyMember}', [FamilyMemberController::class, 'update'])->name('family.update');
     Route::delete('/family/{familyMember}', [FamilyMemberController::class, 'destroy'])->name('family.destroy');
 
     // Pendaftaran Kloter

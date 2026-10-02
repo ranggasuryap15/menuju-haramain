@@ -55,7 +55,7 @@
             @php
                 $startDate = \Carbon\Carbon::parse($kloter->start_date);
                 $endDate = \Carbon\Carbon::parse($kloter->end_date);
-                $durationMonths = $startDate->diffInMonths($endDate);
+                $durationMonths = (int) round($startDate->diffInMonths($endDate));
                 
                 // Hitung total invoice dan nominal dana terkumpul riil
                 $totalInvoicesCount = $kloter->registrations->flatMap->invoices->count();

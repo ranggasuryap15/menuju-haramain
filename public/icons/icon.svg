@@ -1,0 +1,16 @@
+<!--
+File: public/icons/icon.svg
+Tujuan: Icon vektor resmi aplikasi PWA Menuju Haramain (Kubah & Lambang Masjid Berwarna Emas dengan Latar Hijau Killarney)
+Dipakai Oleh: Web App Manifest, Apple Touch Icon, Browser Favicon
+Dependensi Utama: Standar SVG W3C
+Daftar Komponen Utama: Background rect #346733, Embellishment circle #D4AF37/20, Icon Path Masjid #D4AF37
+Side Effect: Aset statis client-side
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+    <rect width="512" height="512" rx="100" fill="#346733"/>
+    <circle cx="256" cy="256" r="210" fill="#234622" opacity="0.6"/>
+    <circle cx="256" cy="256" r="170" fill="none" stroke="#D4AF37" stroke-width="6" opacity="0.4"/>
+    <g fill="#D4AF37" transform="translate(64, 64) scale(16)">
+        <path d="M12 2L3 8v12h18V8L12 2zm0 3.2L18.4 9H5.6L12 5.2zM5 11h14v7H5v-7zm7 1.5c-1.38 0-2.5 1.12-2.5 2.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5-1.12-2.5-2.5-2.5z"/>
+    </g>
+</svg>

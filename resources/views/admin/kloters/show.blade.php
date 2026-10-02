@@ -48,7 +48,7 @@
     @php
         $startDate = \Carbon\Carbon::parse($kloter->start_date);
         $endDate = \Carbon\Carbon::parse($kloter->end_date);
-        $durationMonths = $startDate->diffInMonths($endDate);
+        $durationMonths = (int) round($startDate->diffInMonths($endDate));
 
         $totalFamilyCount = $kloter->registrations->count();
         $totalPaxCount = $kloter->registrations->flatMap->paxes->count();

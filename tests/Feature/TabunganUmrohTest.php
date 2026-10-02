@@ -9,7 +9,9 @@
  *   - test_user_can_view_and_update_profile()
  *   - test_user_can_update_password()
  *   - test_multi_person_family_management()
+ *   - test_family_member_update_and_authorization()
  *   - test_kloter_registration_with_selected_paxes()
+ *   - test_can_register_additional_family_member_to_same_kloter()
  *   - test_kloter_registration_auto_approved_for_staff()
  *   - test_admin_can_approve_and_reject_registration()
  *   - test_monthly_billing_generation_and_idempotency()
@@ -139,6 +141,57 @@ class TabunganUmrohTest extends TestCase
     }
 
     /**
+     * Test pembaruan data anggota keluarga dan proteksi otorisasi antar akun
+     */
+    public function test_family_member_update_and_authorization(): void
+    {
+        $user1 = User::factory()->create(['role' => User::ROLE_JAMAAH]);
+        $user2 = User::factory()->create(['role' => User::ROLE_JAMAAH]);
+
+        $member = FamilyMember::create([
+            'user_id' => $user1->id,
+            'full_name' => 'Fatimah Asli',
+            'relationship' => 'Istri',
+            'gender' => 'P',
+            'identity_number' => '3201019901880001',
+            'birth_date' => '1992-05-15',
+            'phone' => '081234567890',
+        ]);
+
+        // User lain (user2) mencoba update data milik user1 -> 403 Forbidden
+        $this->actingAs($user2);
+        $responseUnauthorized = $this->put(route('jamaah.family.update', $member), [
+            'full_name' => 'Hacker Name',
+            'relationship' => 'Istri',
+            'gender' => 'P',
+        ]);
+        $responseUnauthorized->assertStatus(403);
+
+        // User pemilik (user1) mengupdate data dengan benar
+        $this->actingAs($user1);
+        $response = $this->put(route('jamaah.family.update', $member), [
+            'full_name' => 'Fatimah Az-Zahra Updated',
+            'relationship' => 'Istri',
+            'gender' => 'P',
+            'identity_number' => '3201019901889999',
+            'birth_date' => '1992-05-20',
+            'phone' => '089988776655',
+        ]);
+
+        $response->assertRedirect(route('jamaah.family.index'));
+        $response->assertSessionHas('success');
+
+        $this->assertDatabaseHas('family_members', [
+            'id' => $member->id,
+            'user_id' => $user1->id,
+            'full_name' => 'Fatimah Az-Zahra Updated',
+            'identity_number' => '3201019901889999',
+            'birth_date' => '1992-05-20 00:00:00',
+            'phone' => '089988776655',
+        ]);
+    }
+
+    /**
      * 3. Test pendaftaran kloter dengan multi-pax
      */
     public function test_kloter_registration_with_selected_paxes(): void
@@ -186,6 +239,83 @@ class TabunganUmrohTest extends TestCase
         $registration = KloterRegistration::where('user_id', $user->id)->first();
         $this->assertEquals(2, $registration->paxes()->count());
         $this->assertTrue($registration->isPending());
+    }
+
+    /**
+     * Test penambahan anggota keluarga baru ke kloter yang sudah ada pendaftaran sebelumnya
+     */
+    public function test_can_register_additional_family_member_to_same_kloter(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_JAMAAH]);
+        $member1 = FamilyMember::create([
+            'user_id' => $user->id,
+            'full_name' => 'Joehar Anwari',
+            'relationship' => 'Kepala Keluarga',
+            'gender' => 'L',
+        ]);
+
+        $kloter = Kloter::create([
+            'name' => 'Kloter Tambun 1448H',
+            'code' => 'KLTR-TAMBUN-' . uniqid(),
+            'target_per_pax' => 27000000,
+            'monthly_per_pax' => 450000,
+            'start_date' => Carbon::now()->startOfMonth()->toDateString(),
+            'end_date' => Carbon::now()->addMonths(60)->endOfMonth()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($user);
+
+        // 1. Pendaftaran pertama: hanya mendaftarkan diri sendiri (member1)
+        $res1 = $this->post(route('jamaah.registrations.store'), [
+            'kloter_id' => $kloter->id,
+            'family_member_ids' => [$member1->id],
+        ]);
+        $res1->assertRedirect(route('jamaah.dashboard'));
+
+        $this->assertDatabaseHas('kloter_registrations', [
+            'user_id' => $user->id,
+            'kloter_id' => $kloter->id,
+            'total_pax' => 1,
+        ]);
+
+        // 2. Buat anggota keluarga baru: Arinda Permata Sari (Istri)
+        $member2 = FamilyMember::create([
+            'user_id' => $user->id,
+            'full_name' => 'Arinda Permata Sari',
+            'relationship' => 'Istri',
+            'gender' => 'P',
+        ]);
+
+        // 3. Akses form pendaftaran kloter: kloter harus tetap dapat dipilih (tidak disabled)
+        $formRes = $this->get(route('jamaah.registrations.create'));
+        $formRes->assertStatus(200);
+        $formRes->assertSee('Arinda Permata Sari');
+        $formRes->assertSee('Sudah Terdaftar di Kloter Ini');
+
+        // 4. Daftarkan anggota keluarga kedua (member2) ke kloter yang sama
+        $res2 = $this->post(route('jamaah.registrations.store'), [
+            'kloter_id' => $kloter->id,
+            'family_member_ids' => [$member2->id],
+        ]);
+        $res2->assertRedirect(route('jamaah.dashboard'));
+
+        // Verifikasi registrasi berhasil diupdate menjadi total 2 pax
+        $this->assertDatabaseHas('kloter_registrations', [
+            'user_id' => $user->id,
+            'kloter_id' => $kloter->id,
+            'total_pax' => 2,
+        ]);
+
+        $reg = KloterRegistration::where('user_id', $user->id)->where('kloter_id', $kloter->id)->first();
+        $this->assertEquals(2, $reg->paxes()->count());
+
+        // 5. Jika mencoba submit ulang member yang sudah terdaftar semua -> Ditolak dengan error
+        $res3 = $this->post(route('jamaah.registrations.store'), [
+            'kloter_id' => $kloter->id,
+            'family_member_ids' => [$member1->id, $member2->id],
+        ]);
+        $res3->assertSessionHas('error');
     }
 
     /**

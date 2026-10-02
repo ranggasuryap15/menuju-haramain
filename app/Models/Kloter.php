@@ -80,7 +80,7 @@ class Kloter extends Model
             return 0;
         }
 
-        return max(1, $this->start_date->diffInMonths($this->end_date) + 1);
+        return max(1, (int) round($this->start_date->diffInMonths($this->end_date)));
     }
 
     /**
