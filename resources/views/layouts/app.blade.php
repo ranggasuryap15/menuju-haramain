@@ -135,7 +135,7 @@ Side Effect: Render HTML shell, navigasi antarmuka, modal notifikasi real-time, 
         }
     </style>
 </head>
-<body class="h-full font-sans antialiased text-slate-800 bg-[#f8faf9]" x-data="{ mobileDrawerOpen: false, quickSwitchOpen: false, notificationsOpen: false }">
+<body class="h-full font-sans antialiased text-slate-800 bg-[#f8faf9]" x-data="{ mobileDrawerOpen: false, notificationsOpen: false }">
 
     @auth
         @php
@@ -293,48 +293,6 @@ Side Effect: Render HTML shell, navigasi antarmuka, modal notifikasi real-time, 
                             <span>Daftar Kloter Baru</span>
                         </a>
                     </nav>
-                </div>
-
-                <!-- Quick Switch Akun Demo Widget di Sidebar -->
-                <div class="p-3 bg-amber-50/70 rounded-2xl border border-amber-200">
-                    <div class="flex items-center gap-1.5 text-[11px] font-bold text-amber-900 mb-2">
-                        <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                        <span>Quick Switch Akun Demo</span>
-                    </div>
-                    <div class="space-y-1">
-                        <form action="{{ route('quick-login') }}" method="POST">
-                            @csrf
-                            <input type="hidden" name="role" value="superadmin">
-                            <button type="submit" class="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-semibold hover:bg-amber-100 flex items-center justify-between text-slate-800 transition">
-                                <span>Superadmin</span>
-                                <span class="text-[10px] text-amber-700 font-normal">Abdullah</span>
-                            </button>
-                        </form>
-                        <form action="{{ route('quick-login') }}" method="POST">
-                            @csrf
-                            <input type="hidden" name="role" value="admin_keuangan">
-                            <button type="submit" class="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-semibold hover:bg-amber-100 flex items-center justify-between text-slate-800 transition">
-                                <span>Admin Keuangan</span>
-                                <span class="text-[10px] text-teal-700 font-normal">Hendra (Dual)</span>
-                            </button>
-                        </form>
-                        <form action="{{ route('quick-login') }}" method="POST">
-                            @csrf
-                            <input type="hidden" name="role" value="jamaah_ahmad">
-                            <button type="submit" class="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-semibold hover:bg-amber-100 flex items-center justify-between text-slate-800 transition">
-                                <span>Jamaah Ahmad</span>
-                                <span class="text-[10px] text-slate-500 font-normal">3 Pax</span>
-                            </button>
-                        </form>
-                        <form action="{{ route('quick-login') }}" method="POST">
-                            @csrf
-                            <input type="hidden" name="role" value="jamaah_siti">
-                            <button type="submit" class="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] font-semibold hover:bg-amber-100 flex items-center justify-between text-slate-800 transition">
-                                <span>Jamaah Siti</span>
-                                <span class="text-[10px] text-slate-500 font-normal">2 Pax</span>
-                            </button>
-                        </form>
-                    </div>
                 </div>
             </div>
 
@@ -547,45 +505,6 @@ Side Effect: Render HTML shell, navigasi antarmuka, modal notifikasi real-time, 
                                         <span>Profil Saya</span>
                                         <span class="text-[10px] text-slate-400">Ubah Akun &rarr;</span>
                                     </a>
-                                </div>
-
-                                <!-- Demo Switcher di Mobile Drawer -->
-                                <div class="mt-2 p-3 bg-amber-50 rounded-xl border border-amber-200">
-                                    <span class="text-[10px] font-extrabold text-amber-900 uppercase tracking-wider block mb-2">Switch Akun Demo</span>
-                                    <div class="space-y-1">
-                                        <form action="{{ route('quick-login') }}" method="POST">
-                                            @csrf
-                                            <input type="hidden" name="role" value="superadmin">
-                                            <button type="submit" class="w-full text-left px-2 py-1.5 rounded text-xs font-semibold hover:bg-amber-100 flex justify-between">
-                                                <span>Superadmin</span>
-                                                <span class="text-[10px] text-amber-700">Abdullah</span>
-                                            </button>
-                                        </form>
-                                        <form action="{{ route('quick-login') }}" method="POST">
-                                            @csrf
-                                            <input type="hidden" name="role" value="admin_keuangan">
-                                            <button type="submit" class="w-full text-left px-2 py-1.5 rounded text-xs font-semibold hover:bg-amber-100 flex justify-between">
-                                                <span>Admin Keuangan</span>
-                                                <span class="text-[10px] text-teal-700">Hendra</span>
-                                            </button>
-                                        </form>
-                                        <form action="{{ route('quick-login') }}" method="POST">
-                                            @csrf
-                                            <input type="hidden" name="role" value="jamaah_ahmad">
-                                            <button type="submit" class="w-full text-left px-2 py-1.5 rounded text-xs font-semibold hover:bg-amber-100 flex justify-between">
-                                                <span>Jamaah Ahmad</span>
-                                                <span class="text-[10px] text-slate-500">3 Pax</span>
-                                            </button>
-                                        </form>
-                                        <form action="{{ route('quick-login') }}" method="POST">
-                                            @csrf
-                                            <input type="hidden" name="role" value="jamaah_siti">
-                                            <button type="submit" class="w-full text-left px-2 py-1.5 rounded text-xs font-semibold hover:bg-amber-100 flex justify-between">
-                                                <span>Jamaah Siti</span>
-                                                <span class="text-[10px] text-slate-500">2 Pax</span>
-                                            </button>
-                                        </form>
-                                    </div>
                                 </div>
                             </div>
 
@@ -878,50 +797,6 @@ Side Effect: Render HTML shell, navigasi antarmuka, modal notifikasi real-time, 
                 </div>
 
                 <div class="flex items-center gap-3">
-                    <!-- Quick Switcher Desktop Dropdown -->
-                    <div class="relative" x-data="{ open: false }">
-                        <button @click="open = !open" type="button" class="inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-xl bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 transition cursor-pointer">
-                            <span class="w-2 h-2 rounded-full bg-amber-500 mr-2 animate-pulse"></span>
-                            Quick Switch Akun
-                            <svg class="w-3.5 h-3.5 ml-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                        </button>
-                        <div x-show="open" @click.outside="open = false" x-cloak class="origin-top-right absolute right-0 mt-2 w-64 rounded-2xl shadow-xl bg-white border border-slate-200 py-2 z-50">
-                            <div class="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pilih Akun Demo</div>
-                            <form action="{{ route('quick-login') }}" method="POST">
-                                @csrf
-                                <input type="hidden" name="role" value="superadmin">
-                                <button type="submit" class="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center justify-between">
-                                    <span class="font-semibold">Superadmin</span>
-                                    <span class="text-[10px] text-slate-500">Abdullah</span>
-                                </button>
-                            </form>
-                            <form action="{{ route('quick-login') }}" method="POST">
-                                @csrf
-                                <input type="hidden" name="role" value="admin_keuangan">
-                                <button type="submit" class="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center justify-between">
-                                    <span class="font-semibold">Admin Keuangan</span>
-                                    <span class="text-[10px] text-teal-700">Hendra (Dual)</span>
-                                </button>
-                            </form>
-                            <form action="{{ route('quick-login') }}" method="POST">
-                                @csrf
-                                <input type="hidden" name="role" value="jamaah_ahmad">
-                                <button type="submit" class="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center justify-between">
-                                    <span class="font-semibold">Jamaah Ahmad (3 Pax)</span>
-                                    <span class="text-[10px] text-slate-500">Keluarga</span>
-                                </button>
-                            </form>
-                            <form action="{{ route('quick-login') }}" method="POST">
-                                @csrf
-                                <input type="hidden" name="role" value="jamaah_siti">
-                                <button type="submit" class="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center justify-between">
-                                    <span class="font-semibold">Jamaah Siti (2 Pax)</span>
-                                    <span class="text-[10px] text-slate-500">Pasutri</span>
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-
                     <!-- Tombol Lonceng Notifikasi Desktop Modal Trigger -->
                     <button @click="notificationsOpen = true" type="button"
                             class="relative inline-flex items-center justify-center p-2 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 hover:text-slate-900 transition cursor-pointer bg-white shadow-xs"

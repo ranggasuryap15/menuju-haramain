@@ -1,10 +1,10 @@
 <?php
 /**
  * File: app/Http/Controllers/AuthController.php
- * Tujuan: Manajemen autentikasi pengguna (login, registrasi calon jamaah baru, quick switch role demo, logout) dengan guard redirect jika sudah login
- * Dipakai Oleh: routes/web.php (/login, /register, /quick-login, /logout)
+ * Tujuan: Manajemen autentikasi pengguna (login, registrasi calon jamaah baru, logout) dengan guard redirect jika sudah login
+ * Dipakai Oleh: routes/web.php (/login, /register, /logout)
  * Dependensi Utama: Illuminate\Support\Facades\Auth, App\Models\User, App\Models\FamilyMember, Hash
- * Daftar Fungsi Utama: showLoginForm(), login(), showRegisterForm(), register(), quickLogin(), logout()
+ * Daftar Fungsi Utama: showLoginForm(), login(), showRegisterForm(), register(), logout()
  * Side Effect: Sesi login dibuat/dihapus, session regeneration, insert data user baru
  */
 
@@ -104,34 +104,6 @@ class AuthController extends Controller
         $request->session()->regenerate();
 
         return redirect()->route('jamaah.dashboard')->with('success', 'Selamat datang! Akun tabungan umroh Anda berhasil dibuat.');
-    }
-
-    /**
-     * Fitur kemudahan demo untuk berpindah akun pengujian secara cepat
-     */
-    public function quickLogin(Request $request): RedirectResponse
-    {
-        $role = $request->input('role');
-        $user = match ($role) {
-            'superadmin' => User::where('role', User::ROLE_SUPERADMIN)->first(),
-            'admin_keuangan' => User::where('role', User::ROLE_ADMIN_KEUANGAN)->first(),
-            'jamaah_ahmad' => User::where('email', 'ahmad@gmail.com')->first(),
-            'jamaah_siti' => User::where('email', 'siti@gmail.com')->first(),
-            default => null,
-        };
-
-        if ($user) {
-            Auth::login($user);
-            $request->session()->regenerate();
-
-            if ($user->isStaff() && $request->input('view') !== 'jamaah') {
-                return redirect()->route('admin.dashboard')->with('success', 'Masuk sebagai ' . $user->name);
-            }
-
-            return redirect()->route('jamaah.dashboard')->with('success', 'Masuk sebagai ' . $user->name);
-        }
-
-        return redirect()->route('login')->with('error', 'Akun demo tidak ditemukan.');
     }
 
     public function logout(Request $request): RedirectResponse

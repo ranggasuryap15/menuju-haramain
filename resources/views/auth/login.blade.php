@@ -1,10 +1,10 @@
 <!--
 File: resources/views/auth/login.blade.php
-Tujuan: Halaman login pengguna serta panel quick-access akun demo untuk pengujian antar peran
+Tujuan: Halaman login pengguna (email dan kata sandi) untuk masuk ke portal sistem
 Dipakai Oleh: AuthController@showLoginForm (GET /login)
 Dependensi Utama: layouts.app, AuthController
-Daftar Komponen Utama: Form kredensial login, Kartu Quick-Login peran (Superadmin, Keuangan, Jamaah 3 Pax, Jamaah 2 Pax)
-Side Effect: POST ke /login atau /quick-login
+Daftar Komponen Utama: Form kredensial login (email, password), tombol submit, link registrasi
+Side Effect: POST ke /login
 -->
 @extends('layouts.app')
 
@@ -66,57 +66,6 @@ Side Effect: POST ke /login atau /quick-login
             <div class="mt-4 text-center">
                 <span class="text-xs text-slate-500">Belum punya akun tabungan?</span>
                 <a href="{{ route('register') }}" class="text-xs font-bold text-[#007C6A] hover:underline ml-1">Daftar Sekarang</a>
-            </div>
-
-            <!-- Quick Demo Login Section -->
-            <div class="mt-6 pt-6 border-t border-slate-200">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-xs font-bold text-slate-600 uppercase tracking-wider">Akses Cepat Mode Uji (1-Klik)</span>
-                    <span class="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">Demo Ready</span>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    
-                    <!-- Superadmin -->
-                    <form action="{{ route('quick-login') }}" method="POST">
-                        @csrf
-                        <input type="hidden" name="role" value="superadmin">
-                        <button type="submit" class="w-full text-left p-2.5 rounded-xl border border-slate-200 hover:border-amber-400 hover:bg-amber-50/50 transition-all group">
-                            <span class="block text-xs font-bold text-slate-800 group-hover:text-amber-800">Superadmin</span>
-                            <span class="block text-[11px] text-slate-500">Kelola kloter & all access</span>
-                        </button>
-                    </form>
-
-                    <!-- Admin Keuangan -->
-                    <form action="{{ route('quick-login') }}" method="POST">
-                        @csrf
-                        <input type="hidden" name="role" value="admin_keuangan">
-                        <button type="submit" class="w-full text-left p-2.5 rounded-xl border border-slate-200 hover:border-teal-400 hover:bg-teal-50/50 transition-all group">
-                            <span class="block text-xs font-bold text-slate-800 group-hover:text-teal-800">Admin Keuangan</span>
-                            <span class="block text-[11px] text-slate-500">Approval bukti & jama'ah</span>
-                        </button>
-                    </form>
-
-                    <!-- Jamaah Ahmad (3 Pax) -->
-                    <form action="{{ route('quick-login') }}" method="POST">
-                        @csrf
-                        <input type="hidden" name="role" value="jamaah_ahmad">
-                        <button type="submit" class="w-full text-left p-2.5 rounded-xl border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all group">
-                            <span class="block text-xs font-bold text-slate-800 group-hover:text-[#346733]">Ahmad (3 Pax)</span>
-                            <span class="block text-[11px] text-slate-500">Suami, Istri, 1 Anak</span>
-                        </button>
-                    </form>
-
-                    <!-- Jamaah Siti (2 Pax) -->
-                    <form action="{{ route('quick-login') }}" method="POST">
-                        @csrf
-                        <input type="hidden" name="role" value="jamaah_siti">
-                        <button type="submit" class="w-full text-left p-2.5 rounded-xl border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all group">
-                            <span class="block text-xs font-bold text-slate-800 group-hover:text-[#346733]">Siti Rahma (2 Pax)</span>
-                            <span class="block text-[11px] text-slate-500">Istri & Suami</span>
-                        </button>
-                    </form>
-
-                </div>
             </div>
 
         </div>

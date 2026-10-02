@@ -1267,7 +1267,7 @@ class TabunganUmrohTest extends TestCase
      */
     public function test_default_superadmin_always_exists_and_can_authenticate(): void
     {
-        $superadmin = User::where('email', 'superadmin@haramain.com')->first();
+        $superadmin = User::where('email', 'ranggasurya.313@gmail.com')->first();
 
         // 1. Pastikan record superadmin ditemukan
         $this->assertNotNull($superadmin, 'Akun superadmin default harus otomatis ada di database.');
@@ -1279,7 +1279,7 @@ class TabunganUmrohTest extends TestCase
 
         // 3. Pastikan bisa login via form login dan redirect ke dashboard admin
         $response = $this->post(route('login'), [
-            'email' => 'superadmin@haramain.com',
+            'email' => 'ranggasurya.313@gmail.com',
             'password' => 'password',
         ]);
 

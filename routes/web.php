@@ -42,8 +42,7 @@ Route::middleware('guest')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
 });
 
-// Switcher Demo & Logout
-Route::post('/quick-login', [AuthController::class, 'quickLogin'])->name('quick-login');
+// Logout
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // Profil Pengguna (Dapat diakses oleh Jamaah, Admin Keuangan, & Superadmin)
