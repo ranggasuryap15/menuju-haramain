@@ -1,10 +1,10 @@
 {{--
 /**
  * File: resources/views/admin/kloters/show.blade.php
- * Tujuan: Menampilkan rincian detail master kloter umroh, link WhatsApp grup jama'ah, panel pemicu penagihan khusus kloter ini, agregat keuangan, manajemen & edit detail rekening bank penampung kloter, tombol navigasi edit kloter, daftar pendaftar keluarga beserta anggota pax & status awal penagihan, serta tabel riwayat transaksi pembayaran jamaah lengkap dengan paginasi descending
+ * Tujuan: Menampilkan rincian detail master kloter umroh, link WhatsApp grup jama'ah, panel dan modal pemicu generate tagihan manual (baik serentak semua anggota kloter maupun khusus per orang), agregat keuangan, manajemen & edit detail rekening bank penampung kloter, tombol navigasi edit kloter, daftar pendaftar keluarga beserta aksi generate tagihan per orang, serta tabel riwayat transaksi pembayaran jamaah lengkap dengan paginasi descending
  * Dipakai Oleh: App\Http\Controllers\Admin\KloterController@show
- * Dependensi Utama: Tailwind CSS CDN, Alpine.js, App\Models\Kloter, App\Models\BankAccount, App\Models\Payment
- * Daftar Komponen Utama: Breadcrumb, Tombol aksi edit & generate tagihan kloter, Panel penagihan kloter terpisah, Metrik keuangan & agregasi pax kloter, informasi paket, tautan grup WA, kartu rekening bank tujuan kloter dengan tombol edit modal & tambah rekening, tabel pendaftar keluarga dengan status awal tagihan, tabel riwayat transaksi pembayaran jamaah berpaginasi descending, modal edit rekening bank, modal tambah rekening baru, modal generate tagihan kloter per bulan
+ * Dependensi Utama: Tailwind CSS CDN, Alpine.js, App\Models\Kloter, App\Models\BankAccount, App\Models\Payment, App\Models\KloterRegistration
+ * Daftar Komponen Utama: Breadcrumb, Tombol aksi simetris header, Panel penagihan, Metrik keuangan & agregasi pax kloter, informasi paket, tautan grup WA, kartu rekening bank kloter, tabel pendaftar keluarga dengan tombol aksi generate tagihan per orang, tabel riwayat transaksi pembayaran jamaah berpaginasi descending, modal generate tagihan manual (semua jamaah vs per orang), modal edit rekening bank, modal tambah rekening baru
  * Side Effect: Tampilan detail kloter, POST form ke admin.kloters.trigger-kloter-billing, PUT form ke admin.bank-accounts.update, POST form ke admin.bank-accounts.store
  */
 --}}
@@ -17,7 +17,22 @@
     showTriggerModal: false,
     showEditBankModal: false,
     showAddBankModal: false,
-    editBank: { id: null, bank_name: '', account_number: '', account_holder: '', is_active: true }
+    targetType: 'all',
+    selectedRegistrationId: 'all',
+    selectedRegistrationName: '',
+    editBank: { id: null, bank_name: '', account_number: '', account_holder: '', is_active: true },
+    openTriggerFor(regId, regName) {
+        this.targetType = 'individual';
+        this.selectedRegistrationId = regId;
+        this.selectedRegistrationName = regName;
+        this.showTriggerModal = true;
+    },
+    openTriggerForAll() {
+        this.targetType = 'all';
+        this.selectedRegistrationId = 'all';
+        this.selectedRegistrationName = '';
+        this.showTriggerModal = true;
+    }
 }">
     <!-- Breadcrumb & Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -40,7 +55,7 @@
         </div>
 
         <div class="flex items-center gap-2 sm:gap-3">
-            <button type="button" @click="showTriggerModal = true" class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:px-4 sm:py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 rounded-xl text-xs sm:text-sm font-bold shadow-xs transition cursor-pointer">
+            <button type="button" @click="openTriggerForAll()" class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:px-4 sm:py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 rounded-xl text-xs sm:text-sm font-bold shadow-xs transition cursor-pointer">
                 <svg class="w-4 h-4 text-[#007C6A] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                 <span class="whitespace-nowrap">Generate Tagihan</span>
             </button>
@@ -120,7 +135,7 @@
                 </p>
             </div>
         </div>
-        <button type="button" @click="showTriggerModal = true" class="px-4 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-xs font-bold backdrop-blur transition whitespace-nowrap cursor-pointer shadow-sm">
+        <button type="button" @click="openTriggerForAll()" class="px-4 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-xs font-bold backdrop-blur transition whitespace-nowrap cursor-pointer shadow-sm">
             Generate Tagihan Kloter Ini &rarr;
         </button>
     </div>
@@ -270,6 +285,7 @@
                         <th class="px-6 py-4">Tagihan Terbit</th>
                         <th class="px-6 py-4">Total Terbayar</th>
                         <th class="px-6 py-4">Status</th>
+                        <th class="px-6 py-4 text-center">Aksi</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
@@ -301,8 +317,8 @@
                                 <div class="flex flex-wrap gap-1.5 max-w-xs">
                                     @foreach($registration->paxes as $pax)
                                         <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-haramain-green border border-emerald-200">
-                                            {{ $pax->familyMember->name }}
-                                            <span class="text-[10px] text-gray-500 ml-1">({{ ucfirst($pax->familyMember->relationship) }})</span>
+                                            {{ $pax->familyMember?->full_name ?? $pax->familyMember?->name }}
+                                            <span class="text-[10px] text-gray-500 ml-1">({{ ucfirst($pax->familyMember?->relationship ?? 'Peserta') }})</span>
                                         </span>
                                     @endforeach
                                 </div>
@@ -324,10 +340,19 @@
                                     {{ ucfirst($registration->status) }}
                                 </span>
                             </td>
+                            <td class="px-6 py-4 text-center">
+                                <button type="button"
+                                        @click="openTriggerFor({{ $registration->id }}, '{{ addslashes($registration->user->name) }}')"
+                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-teal-200 bg-teal-50 text-[#007C6A] hover:bg-teal-100 text-xs font-bold shadow-2xs transition cursor-pointer"
+                                        title="Terbitkan tagihan khusus untuk {{ $registration->user->name }}">
+                                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                    <span>Generate Tagihan</span>
+                                </button>
+                            </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-6 py-8 text-center text-xs text-gray-500">
+                            <td colspan="7" class="px-6 py-8 text-center text-xs text-gray-500">
                                 Belum ada keluarga atau jama'ah yang mendaftar pada kloter ini.
                             </td>
                         </tr>
@@ -517,62 +542,107 @@
         @endif
     </div>
 
-    <!-- Modal Trigger Penagihan Khusus Kloter Ini -->
+    <!-- Modal Trigger Penagihan (Semua Jamaah / Per Orang) -->
     <div x-show="showTriggerModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
         <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
             <div x-show="showTriggerModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showTriggerModal = false"></div>
 
-            <div x-show="showTriggerModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
+            <div x-show="showTriggerModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
                 <form action="{{ route('admin.kloters.trigger-kloter-billing', $kloter) }}" method="POST">
                     @csrf
                     <div class="p-6">
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-[#346733]">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-[#346733]">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-gray-900 text-base">Generate Tagihan Manual</h3>
+                                    <p class="text-xs text-gray-500">{{ $kloter->name }} ({{ $kloter->code }})</p>
+                                </div>
                             </div>
-                            <div>
-                                <h3 class="font-bold text-gray-900 text-base">Generate Tagihan Kloter</h3>
-                                <p class="text-xs text-gray-500">{{ $kloter->name }} ({{ $kloter->code }})</p>
-                            </div>
+                            <button type="button" @click="showTriggerModal = false" class="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none cursor-pointer">&times;</button>
                         </div>
 
                         <div class="space-y-4">
+                            <!-- 1. Pilihan Target: Semua Jamaah vs Per Orang -->
                             <div>
-                                <label class="block text-xs font-semibold text-gray-700 mb-1">Periode Penagihan (Bulan / Tahun)</label>
-                                <input type="month" name="billing_date" value="{{ date('Y-m') }}" class="w-full px-4 py-2.5 sm:py-3 text-sm rounded-xl border border-slate-300 shadow-sm focus:border-[#346733] focus:ring-2 focus:ring-[#346733] outline-none" required>
-                                <p class="text-[11px] text-gray-400 mt-1">Sistem idempoten: Tagihan yang sudah terbit pada bulan ini untuk kloter ini tidak akan terduplikasi.</p>
+                                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Penerima Tagihan</label>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <label class="flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition select-none"
+                                           :class="targetType === 'all' ? 'border-[#346733] bg-emerald-50 text-[#346733] font-bold' : 'border-slate-200 bg-white text-slate-700'">
+                                        <input type="radio" name="target_selector" value="all" x-model="targetType" @change="selectedRegistrationId = 'all'" class="text-[#346733] focus:ring-[#346733]">
+                                        <div class="text-xs">
+                                            <span class="block">Semua Jama'ah</span>
+                                            <span class="text-[10px] opacity-75 font-normal">({{ $totalFamilyCount }} Akun, {{ $totalPaxCount }} Jiwa)</span>
+                                        </div>
+                                    </label>
+
+                                    <label class="flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition select-none"
+                                           :class="targetType === 'individual' ? 'border-[#346733] bg-emerald-50 text-[#346733] font-bold' : 'border-slate-200 bg-white text-slate-700'">
+                                        <input type="radio" name="target_selector" value="individual" x-model="targetType" class="text-[#346733] focus:ring-[#346733]">
+                                        <div class="text-xs">
+                                            <span class="block">Per Orang</span>
+                                            <span class="text-[10px] opacity-75 font-normal">Pilih 1 pendaftar tertentu</span>
+                                        </div>
+                                    </label>
+                                </div>
                             </div>
 
+                            <!-- Dropdown Pilihan Pendaftar (Tampil jika Per Orang) -->
+                            <div x-show="targetType === 'individual'" x-transition class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                                <label class="block text-xs font-semibold text-slate-800">Pilih Jama'ah / Akun Penanggung Jawab:</label>
+                                <select name="registration_id" x-model="selectedRegistrationId" class="w-full text-xs font-medium rounded-xl border-slate-300 shadow-sm focus:border-[#346733] focus:ring-2 focus:ring-[#346733] py-2 px-3">
+                                    <option value="all" disabled>-- Pilih Jama'ah --</option>
+                                    @foreach($kloter->registrations as $r)
+                                        <option value="{{ $r->id }}">
+                                            {{ $r->user->name }} ({{ $r->paxes->count() }} Jiwa) &bull; Rp {{ number_format($r->paxes->count() * $kloter->monthly_per_pax, 0, ',', '.') }}/bln
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <!-- 2. Periode Penagihan -->
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-700 mb-1">Periode Penagihan (Bulan / Tahun)</label>
+                                <input type="month" name="billing_date" value="{{ date('Y-m') }}" class="w-full px-4 py-2.5 text-sm rounded-xl border border-slate-300 shadow-sm focus:border-[#346733] focus:ring-2 focus:ring-[#346733] outline-none" required>
+                                <p class="text-[11px] text-gray-400 mt-1">Sistem idempoten: Tagihan yang sudah terbit pada bulan ini tidak akan terduplikasi.</p>
+                            </div>
+
+                            <!-- 3. Opsi Terbitkan Sekaligus Periode Tertunggak -->
                             <div class="pt-2 border-t border-slate-100">
                                 <label class="flex items-start gap-2.5 cursor-pointer select-none">
                                     <input type="checkbox" name="generate_all_pending" value="1" class="mt-0.5 w-4 h-4 rounded text-[#346733] border-slate-300 focus:ring-[#346733]">
                                     <div class="text-xs">
                                         <span class="font-bold text-gray-800">Terbitkan Sekaligus Seluruh Periode Tertunggak</span>
                                         <p class="text-[11px] text-gray-500 mt-0.5">
-                                            Generate bertahap dari awal kloter ({{ $kloter->start_date->locale('id')->translatedFormat('F Y') }}) sampai periode yang dipilih di atas untuk seluruh bulan yang belum pernah diterbitkan tagihannya.
+                                            Generate otomatis seluruh bulan yang belum pernah diterbitkan sejak awal kloter / bulan efektif bergabung sampai periode yang dipilih.
                                         </p>
                                     </div>
                                 </label>
                             </div>
 
+                            <!-- Info Kalkulasi Ringkas -->
                             <div class="p-3 bg-emerald-50 rounded-xl text-xs text-emerald-900 border border-emerald-200 space-y-1">
-                                <div class="font-bold">Informasi Tagihan Kloter:</div>
-                                <ul class="list-disc list-inside space-y-0.5 text-[11px]">
-                                    <li>Biaya bulanan: Rp {{ number_format($kloter->monthly_per_pax, 0, ',', '.') }} / orang</li>
-                                    <li>Target total: Rp {{ number_format($kloter->target_per_pax, 0, ',', '.') }} / orang</li>
-                                    <li>Jumlah jama'ah terdaftar: {{ $totalPaxCount }} jiwa ({{ $totalFamilyCount }} akun keluarga)</li>
-                                    <li>Jama'ah susulan hanya ditagih sejak bulan bergabung, sisa bulan awal ditagihkan pada bulan akhir.</li>
+                                <div class="font-bold flex items-center gap-1">
+                                    <svg class="w-4 h-4 text-[#346733]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    <span>Informasi Tarif & Aturan:</span>
+                                </div>
+                                <ul class="list-disc list-inside space-y-0.5 text-[11px] text-emerald-800">
+                                    <li>Tarif kloter: <strong>Rp {{ number_format($kloter->monthly_per_pax, 0, ',', '.') }}</strong> / jiwa per bulan.</li>
+                                    <li>Tagihan per keluarga = tarif bulanan &times; jumlah jiwa (pax).</li>
+                                    <li>Jama'ah susulan (late joiner) dihitung otomatis mulai bulan efektif bergabung.</li>
                                 </ul>
                             </div>
                         </div>
                     </div>
 
-                    <div class="bg-gray-50 px-6 py-3 flex justify-end gap-2">
-                        <button type="button" @click="showTriggerModal = false" class="px-4 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50">
+                    <div class="bg-gray-50 px-6 py-3 flex justify-end gap-2 border-t border-gray-100">
+                        <button type="button" @click="showTriggerModal = false" class="px-4 py-2 border border-gray-300 rounded-xl text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 cursor-pointer">
                             Batal
                         </button>
-                        <button type="submit" class="px-4 py-2 rounded-lg text-xs font-semibold text-white bg-[#346733] hover:bg-[#234622] shadow cursor-pointer">
-                            Jalankan Generate Kloter Ini
+                        <button type="submit" class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#346733] hover:bg-[#234622] shadow-sm transition cursor-pointer">
+                            <span x-text="targetType === 'individual' ? 'Generate Tagihan Per Orang' : 'Generate Semua Jama\'ah Kloter'"></span>
                         </button>
                     </div>
                 </form>

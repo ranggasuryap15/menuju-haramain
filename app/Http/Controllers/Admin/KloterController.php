@@ -2,11 +2,11 @@
 
 /**
  * File: app/Http/Controllers/Admin/KloterController.php
- * Tujuan: Manajemen master kloter tabungan umroh (pembuatan kloter, link WhatsApp grup kloter, pengubahan detail kloter, normalisasi kode kloter selalu UPPERCASE, asosiasi multi-rekening bank per kloter, rentang periode, tarif per pax, detail peserta kloter, rekapitulasi dana terkumpul riil, riwayat transaksi pembayaran jamaah kloter berpaginasi descending, dan penagihan spesifik per-kloter)
- * Dipakai Oleh: routes/web.php (/admin/kloters, /admin/kloters/create, /admin/kloters/{kloter}, /admin/kloters/{kloter}/edit, /admin/kloters/{kloter}/trigger-billing)
- * Dependensi Utama: App\Models\Kloter, App\Models\BankAccount, App\Models\Payment, App\Services\BillingService, Request, Illuminate\Validation\Rule
- * Daftar Fungsi Utama: index(), create(), store(), show(), edit(), update(), triggerBilling(), triggerKloterBilling()
- * Side Effect: Write DB tabel kloters (insert/update uppercase code, whatsapp_group_url), pivot kloter_bank_account (sync), eksekusi pembuatan tagihan bulanan
+ * Tujuan: Manajemen master kloter tabungan umroh (pembuatan kloter, link WhatsApp grup kloter, pengubahan detail kloter, normalisasi kode kloter selalu UPPERCASE, asosiasi multi-rekening bank per kloter, rentang periode, tarif per pax, detail peserta kloter, rekapitulasi dana terkumpul riil, riwayat transaksi pembayaran jamaah kloter berpaginasi descending, serta penerbitan tagihan manual massal untuk setiap orang di kloter maupun spesifik per orang/keluarga)
+ * Dipakai Oleh: routes/web.php (/admin/kloters, /admin/kloters/create, /admin/kloters/{kloter}, /admin/kloters/{kloter}/edit, /admin/kloters/{kloter}/trigger-billing, /admin/registrations/{registration}/trigger-billing)
+ * Dependensi Utama: App\Models\Kloter, App\Models\KloterRegistration, App\Models\BankAccount, App\Models\Payment, App\Services\BillingService, Request, Illuminate\Validation\Rule
+ * Daftar Fungsi Utama: index(), create(), store(), show(), edit(), update(), triggerBilling(), triggerKloterBilling(), triggerRegistrationBilling()
+ * Side Effect: Write DB tabel kloters (insert/update uppercase code, whatsapp_group_url), pivot kloter_bank_account (sync), eksekusi pembuatan tagihan bulanan invoices & invoice_items
  */
 
 namespace App\Http\Controllers\Admin;
@@ -14,6 +14,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\BankAccount;
 use App\Models\Kloter;
+use App\Models\KloterRegistration;
 use App\Models\Payment;
 use App\Services\BillingService;
 use Carbon\Carbon;
@@ -60,31 +61,32 @@ class KloterController extends Controller
             'end_date' => ['required', 'date', 'after:start_date'],
             'description' => ['nullable', 'string'],
             'whatsapp_group_url' => ['nullable', 'url', 'max:255'],
-            'status' => ['required', 'in:draft,active,closed,completed'],
             'bank_account_ids' => ['nullable', 'array'],
             'bank_account_ids.*' => ['exists:bank_accounts,id'],
             'new_bank_name' => ['nullable', 'string', 'max:100'],
             'new_account_number' => ['nullable', 'string', 'max:50'],
-            'new_account_holder' => ['nullable', 'string', 'max:150'],
+            'new_account_holder' => ['nullable', 'string', 'max:100'],
         ]);
 
-        $kloterData = collect($validated)->except([
-            'bank_account_ids',
-            'new_bank_name',
-            'new_account_number',
-            'new_account_holder',
-        ])->toArray();
+        $kloter = Kloter::create([
+            'name' => $validated['name'],
+            'code' => $validated['code'],
+            'target_per_pax' => $validated['target_per_pax'],
+            'monthly_per_pax' => $validated['monthly_per_pax'],
+            'start_date' => $validated['start_date'],
+            'end_date' => $validated['end_date'],
+            'description' => $validated['description'] ?? null,
+            'whatsapp_group_url' => $validated['whatsapp_group_url'] ?? null,
+            'status' => 'active',
+        ]);
 
-        $kloter = Kloter::create($kloterData);
+        $bankAccountIds = $request->input('bank_account_ids', []);
 
-        $bankAccountIds = $validated['bank_account_ids'] ?? [];
-
-        // Tambah rekening bank baru langsung bila field diisi lengkap
-        if (!empty($validated['new_bank_name']) && !empty($validated['new_account_number']) && !empty($validated['new_account_holder'])) {
+        if ($request->filled('new_bank_name') && $request->filled('new_account_number') && $request->filled('new_account_holder')) {
             $newBank = BankAccount::create([
-                'bank_name' => $validated['new_bank_name'],
-                'account_number' => $validated['new_account_number'],
-                'account_holder' => $validated['new_account_holder'],
+                'bank_name' => $request->input('new_bank_name'),
+                'account_number' => $request->input('new_account_number'),
+                'account_holder' => $request->input('new_account_holder'),
                 'is_active' => true,
             ]);
             $bankAccountIds[] = $newBank->id;
@@ -94,7 +96,7 @@ class KloterController extends Controller
             $kloter->bankAccounts()->sync(array_unique($bankAccountIds));
         }
 
-        return redirect()->route('admin.kloters.index')->with('success', 'Kloter baru berhasil dibuat.');
+        return redirect()->route('admin.kloters.index')->with('success', "Kloter {$kloter->name} ({$kloter->code}) berhasil dibuat.");
     }
 
     public function show(Kloter $kloter): View
@@ -106,19 +108,14 @@ class KloterController extends Controller
             'registrations.invoices.payments' => fn($q) => $q->where('status', Payment::STATUS_APPROVED),
         ]);
 
-        // Mengambil seluruh transaksi pembayaran jamaah pada kloter ini dengan paginasi descending paling recent
         $payments = Payment::query()
-            ->whereHas('invoice.registration', fn($q) => $q->where('kloter_id', $kloter->id))
-            ->with([
-                'user',
-                'invoice',
-                'bankAccount',
-                'verifier',
-            ])
-            ->orderBy('created_at', 'desc')
+            ->with(['user', 'invoice.registration', 'bankAccount', 'verifier'])
+            ->whereHas('invoice.registration', function ($query) use ($kloter) {
+                $query->where('kloter_id', $kloter->id);
+            })
+            ->orderBy('payment_date', 'desc')
             ->orderBy('id', 'desc')
-            ->paginate(10, ['*'], 'payments_page')
-            ->withQueryString();
+            ->paginate(10);
 
         return view('admin.kloters.show', compact('kloter', 'payments'));
     }
@@ -126,11 +123,7 @@ class KloterController extends Controller
     public function edit(Kloter $kloter): View
     {
         $kloter->load('bankAccounts');
-        $bankAccounts = BankAccount::query()
-            ->where('is_active', true)
-            ->orWhereIn('id', $kloter->bankAccounts->pluck('id'))
-            ->orderBy('bank_name')
-            ->get();
+        $bankAccounts = BankAccount::orderBy('bank_name')->get();
 
         return view('admin.kloters.edit', compact('kloter', 'bankAccounts'));
     }
@@ -155,26 +148,28 @@ class KloterController extends Controller
             'bank_account_ids.*' => ['exists:bank_accounts,id'],
             'new_bank_name' => ['nullable', 'string', 'max:100'],
             'new_account_number' => ['nullable', 'string', 'max:50'],
-            'new_account_holder' => ['nullable', 'string', 'max:150'],
+            'new_account_holder' => ['nullable', 'string', 'max:100'],
         ]);
 
-        $kloterData = collect($validated)->except([
-            'bank_account_ids',
-            'new_bank_name',
-            'new_account_number',
-            'new_account_holder',
-        ])->toArray();
+        $kloter->update([
+            'name' => $validated['name'],
+            'code' => $validated['code'],
+            'target_per_pax' => $validated['target_per_pax'],
+            'monthly_per_pax' => $validated['monthly_per_pax'],
+            'start_date' => $validated['start_date'],
+            'end_date' => $validated['end_date'],
+            'description' => $validated['description'] ?? null,
+            'whatsapp_group_url' => $validated['whatsapp_group_url'] ?? null,
+            'status' => $validated['status'],
+        ]);
 
-        $kloter->update($kloterData);
+        $bankAccountIds = $request->input('bank_account_ids', []);
 
-        $bankAccountIds = $validated['bank_account_ids'] ?? [];
-
-        // Tambah rekening bank baru langsung bila field diisi lengkap
-        if (!empty($validated['new_bank_name']) && !empty($validated['new_account_number']) && !empty($validated['new_account_holder'])) {
+        if ($request->filled('new_bank_name') && $request->filled('new_account_number') && $request->filled('new_account_holder')) {
             $newBank = BankAccount::create([
-                'bank_name' => $validated['new_bank_name'],
-                'account_number' => $validated['new_account_number'],
-                'account_holder' => $validated['new_account_holder'],
+                'bank_name' => $request->input('new_bank_name'),
+                'account_number' => $request->input('new_account_number'),
+                'account_holder' => $request->input('new_account_holder'),
                 'is_active' => true,
             ]);
             $bankAccountIds[] = $newBank->id;
@@ -186,7 +181,7 @@ class KloterController extends Controller
     }
 
     /**
-     * Trigger manual untuk menerbitkan tagihan bulan ini serentak
+     * Trigger manual untuk menerbitkan tagihan bulan ini serentak (seluruh sistem)
      */
     public function triggerBilling(Request $request, BillingService $billingService): RedirectResponse
     {
@@ -204,19 +199,54 @@ class KloterController extends Controller
     }
 
     /**
-     * Trigger manual untuk menerbitkan tagihan khusus pada kloter ini (bisa 1 bulan tertentu atau seluruh periode tertunggak sejak awal kloter)
+     * Trigger manual untuk menerbitkan tagihan khusus pada kloter ini:
+     * - Bisa untuk SEMUA anggota kloter (setiap orang)
+     * - Bisa untuk SPESIFIK 1 anggota keluarga (per orang) jika registration_id disertakan
+     * - Bisa 1 bulan tertentu atau seluruh periode tertunggak sejak awal bergabung
      */
     public function triggerKloterBilling(Request $request, Kloter $kloter, BillingService $billingService): RedirectResponse
     {
         $dateParam = $request->input('billing_date');
         $billingDate = $dateParam ? Carbon::parse($dateParam)->startOfMonth() : Carbon::now()->startOfMonth();
         $generateAllPending = $request->boolean('generate_all_pending');
+        $registrationId = $request->input('registration_id');
 
+        // Jika dipilih per orang / pendaftar tertentu
+        if ($registrationId && $registrationId !== 'all') {
+            $registration = KloterRegistration::with(['user', 'kloter', 'paxes'])->where('kloter_id', $kloter->id)->findOrFail($registrationId);
+            $userName = $registration->user?->name ?? 'Jamaah';
+
+            if ($generateAllPending) {
+                $stats = $billingService->generateRegistrationAllPendingInvoices($registration, $billingDate);
+
+                return back()->with('success', sprintf(
+                    'Generate tagihan per orang untuk "%s" dari periode %s s/d %s selesai (%d bulan). Dibuat: %d invoice baru, Dilewati/Sudah Ada: %d.',
+                    $userName,
+                    $stats['start_period'],
+                    $stats['end_period'],
+                    $stats['months'],
+                    $stats['created'],
+                    $stats['skipped']
+                ));
+            }
+
+            $stats = $billingService->generateRegistrationInvoice($registration, $billingDate);
+
+            return back()->with('success', sprintf(
+                'Generate tagihan per orang untuk "%s" periode %s selesai. Dibuat: %d invoice, Dilewati/Sudah Ada: %d.',
+                $userName,
+                $stats['period'],
+                $stats['created'],
+                $stats['skipped']
+            ));
+        }
+
+        // Untuk setiap orang / semua anggota kloter
         if ($generateAllPending) {
             $stats = $billingService->generateKloterAllPendingInvoices($kloter, $billingDate);
 
             return back()->with('success', sprintf(
-                'Generate tagihan kloter "%s" dari periode %s s/d %s selesai (%d bulan). Dibuat: %d invoice baru, Dilewati/Sudah Ada: %d.',
+                'Generate tagihan kloter "%s" (semua jamaah) dari periode %s s/d %s selesai (%d bulan). Dibuat: %d invoice baru, Dilewati/Sudah Ada: %d.',
                 $kloter->name,
                 $stats['start_period'],
                 $stats['end_period'],
@@ -229,9 +259,45 @@ class KloterController extends Controller
         $stats = $billingService->generateKloterInvoices($kloter, $billingDate);
 
         return back()->with('success', sprintf(
-            'Generate tagihan kloter "%s" periode %s selesai. Dibuat: %d invoice, Dilewati/Sudah Ada: %d.',
+            'Generate tagihan kloter "%s" (semua jamaah) periode %s selesai. Dibuat: %d invoice, Dilewati/Sudah Ada: %d.',
             $kloter->name,
             $billingDate->locale('id')->translatedFormat('F Y'),
+            $stats['created'],
+            $stats['skipped']
+        ));
+    }
+
+    /**
+     * Trigger manual untuk menerbitkan tagihan khusus 1 pendaftaran jama'ah (per orang)
+     */
+    public function triggerRegistrationBilling(Request $request, KloterRegistration $registration, BillingService $billingService): RedirectResponse
+    {
+        $dateParam = $request->input('billing_date');
+        $billingDate = $dateParam ? Carbon::parse($dateParam)->startOfMonth() : Carbon::now()->startOfMonth();
+        $generateAllPending = $request->boolean('generate_all_pending');
+
+        $userName = $registration->user?->name ?? 'Jamaah';
+
+        if ($generateAllPending) {
+            $stats = $billingService->generateRegistrationAllPendingInvoices($registration, $billingDate);
+
+            return back()->with('success', sprintf(
+                'Generate tagihan per orang untuk "%s" dari periode %s s/d %s selesai (%d bulan). Dibuat: %d invoice baru, Dilewati/Sudah Ada: %d.',
+                $userName,
+                $stats['start_period'],
+                $stats['end_period'],
+                $stats['months'],
+                $stats['created'],
+                $stats['skipped']
+            ));
+        }
+
+        $stats = $billingService->generateRegistrationInvoice($registration, $billingDate);
+
+        return back()->with('success', sprintf(
+            'Generate tagihan per orang untuk "%s" periode %s selesai. Dibuat: %d invoice, Dilewati/Sudah Ada: %d.',
+            $userName,
+            $stats['period'],
             $stats['created'],
             $stats['skipped']
         ));
