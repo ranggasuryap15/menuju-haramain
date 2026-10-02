@@ -1,7 +1,7 @@
 <?php
 /**
  * File: app/Services/BillingService.php
- * Tujuan: Layanan terpusat untuk pembuatan tagihan bulanan otomatis dan rekonsiliasi status invoice dengan alokasi FIFO waterfall
+ * Tujuan: Layanan terpusat untuk pembuatan tagihan bulanan otomatis, penanganan pendaftaran susulan (late joiner), pelunasan sisa target di bulan akhir, dan rekonsiliasi status invoice dengan alokasi FIFO waterfall
  * Dipakai Oleh: GenerateMonthlyBillingCommand, AdminInvoiceController, PaymentService, Jamaah\InvoiceController
  * Dependensi Utama: App\Models\Invoice, App\Models\InvoiceItem, App\Models\KloterRegistration, App\Models\Payment, DB
  * Daftar Fungsi Utama: generateMonthlyInvoices(), recalculateInvoiceStatus(), recalculateRegistrationInvoices(), generateInvoiceNumber()
@@ -21,8 +21,10 @@ use Illuminate\Support\Str;
 class BillingService
 {
     /**
-     * Menerbitkan tagihan bulanan otomatis tanggal 1 untuk seluruh pendaftaran kloter yang aktif
-     * Menggunakan DB chunking dan eager loading untuk efisiensi memory & I/O
+     * Menerbitkan tagihan bulanan otomatis tanggal 1 untuk seluruh pendaftaran kloter yang aktif.
+     * Jamaah susulan (late joiner) hanya ditagih sejak bulan bergabung, dan kekurangan bulan awal
+     * ditagihkan sekaligus sebagai pelunasan di bulan akhir kloter sebelum keberangkatan.
+     * Menggunakan DB chunking dan eager loading untuk efisiensi memory & I/O.
      */
     public function generateMonthlyInvoices(?Carbon $billingDate = null): array
     {
@@ -55,6 +57,13 @@ class BillingService
                         continue;
                     }
 
+                    // Jamaah susulan: lewati jika tagihan ditujukan untuk periode sebelum pendaftaran/approval peserta
+                    $effectiveJoinMonth = ($reg->approved_at ?: $reg->created_at)->copy()->startOfMonth();
+                    if ($billingDate->lt($effectiveJoinMonth)) {
+                        $stats['skipped']++;
+                        continue;
+                    }
+
                     // Cek idempotensi: hindari duplikasi jika sudah ada tagihan untuk periode ini
                     $exists = Invoice::where('registration_id', $reg->id)
                         ->where('billing_year', $year)
@@ -67,9 +76,32 @@ class BillingService
                     }
 
                     $monthlyPerPax = (float) $reg->kloter->monthly_per_pax;
-                    $totalAmount = $monthlyPerPax * $paxCount;
+                    $normalMonthlyTotal = $monthlyPerPax * $paxCount;
 
-                    DB::transaction(function () use ($reg, $year, $month, $billingDate, $dueDate, $totalAmount, $paxes, $monthlyPerPax) {
+                    // Deteksi apakah periode penagihan ini berada di bulan terakhir kloter
+                    $kloterEndMonth = $reg->kloter->end_date->copy()->startOfMonth();
+                    $isFinalMonth = $billingDate->greaterThanOrEqualTo($kloterEndMonth);
+
+                    if ($isFinalMonth) {
+                        // Pada bulan terakhir, tagihkan sisa seluruh target biaya paket yang belum ditagihkan sebelumnya
+                        $totalTarget = (float) $reg->kloter->target_per_pax * $paxCount;
+                        $totalBilledPreviously = (float) Invoice::where('registration_id', $reg->id)->sum('total_amount');
+                        $remainingToBill = max(0.0, $totalTarget - $totalBilledPreviously);
+
+                        if ($remainingToBill <= 0.0) {
+                            $stats['skipped']++;
+                            continue;
+                        }
+
+                        $totalAmount = $remainingToBill;
+                    } else {
+                        $totalAmount = $normalMonthlyTotal;
+                    }
+
+                    DB::transaction(function () use (
+                        $reg, $year, $month, $billingDate, $dueDate, $totalAmount,
+                        $paxes, $paxCount, $isFinalMonth, $monthlyPerPax, $normalMonthlyTotal
+                    ) {
                         $invoice = Invoice::create([
                             'registration_id' => $reg->id,
                             'invoice_number' => $this->generateInvoiceNumber($reg->kloter->code, $year, $month, $reg->id),
@@ -82,13 +114,43 @@ class BillingService
                             'status' => Invoice::STATUS_UNPAID,
                         ]);
 
-                        foreach ($paxes as $pax) {
-                            InvoiceItem::create([
-                                'invoice_id' => $invoice->id,
-                                'registration_pax_id' => $pax->id,
-                                'amount' => $monthlyPerPax,
-                                'description' => "Tabungan Umroh Bulan " . $billingDate->locale('id')->translatedFormat('F Y') . " - " . ($pax->familyMember?->full_name ?? 'Peserta'),
-                            ]);
+                        $monthName = $billingDate->locale('id')->translatedFormat('F Y');
+
+                        if ($isFinalMonth && $totalAmount > $normalMonthlyTotal) {
+                            // Late joiner catchup: pisahkan tagihan reguler dan pelunasan periode awal
+                            $catchupPerPax = ($totalAmount - $normalMonthlyTotal) / $paxCount;
+
+                            foreach ($paxes as $pax) {
+                                $paxName = $pax->familyMember?->full_name ?? 'Peserta';
+
+                                InvoiceItem::create([
+                                    'invoice_id' => $invoice->id,
+                                    'registration_pax_id' => $pax->id,
+                                    'amount' => $monthlyPerPax,
+                                    'description' => "Tabungan Umroh Bulan {$monthName} - {$paxName}",
+                                ]);
+
+                                InvoiceItem::create([
+                                    'invoice_id' => $invoice->id,
+                                    'registration_pax_id' => $pax->id,
+                                    'amount' => $catchupPerPax,
+                                    'description' => "Pelunasan Sisa Periode Awal Sebelum Bergabung - {$paxName}",
+                                ]);
+                            }
+                        } else {
+                            $itemAmountPerPax = $totalAmount / $paxCount;
+                            $descPrefix = ($isFinalMonth && $totalAmount < $normalMonthlyTotal)
+                                ? "Tabungan Umroh Bulan {$monthName} (Penyesuaian Akhir)"
+                                : "Tabungan Umroh Bulan {$monthName}";
+
+                            foreach ($paxes as $pax) {
+                                InvoiceItem::create([
+                                    'invoice_id' => $invoice->id,
+                                    'registration_pax_id' => $pax->id,
+                                    'amount' => $itemAmountPerPax,
+                                    'description' => "{$descPrefix} - " . ($pax->familyMember?->full_name ?? 'Peserta'),
+                                ]);
+                            }
                         }
                     });
 

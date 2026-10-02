@@ -27,6 +27,7 @@
  *   - test_default_superadmin_always_exists_and_can_authenticate()
  *   - test_kloter_can_have_distinct_bank_accounts_and_displayed_on_invoice()
  *   - test_kloter_code_is_always_persisted_and_retrieved_in_uppercase()
+ *   - test_late_joining_jamaah_billing_and_final_month_catchup_settlement()
  * Side Effect: Database read/write dalam transaction rollback
  */
 
@@ -1650,6 +1651,150 @@ class TabunganUmrohTest extends TestCase
         ]);
         $createdKloter->refresh();
         $this->assertEquals('KLTR-UPDATED-UPPERCASE', $createdKloter->code);
+    }
+
+    /**
+     * Skenario pengujian pendaftaran susulan (late joiner):
+     * Kloter dibuka April 2026 s/d Januari 2027 (10 bulan).
+     * Jamaah A bergabung April (awal).
+     * Jamaah B bergabung Agustus (bulan ke-5, telat 4 bulan).
+     * Tagihan April - Juli tidak boleh diterbitkan untuk Jamaah B.
+     * Tagihan Agustus - Desember berjalan normal untuk keduanya.
+     * Tagihan Januari 2027 (bulan akhir) menagih sisa target (normal + pelunasan sisa April-Juli).
+     * Akumulasi tagihan keduanya tepat 100% target paket.
+     */
+    public function test_late_joining_jamaah_billing_and_final_month_catchup_settlement()
+    {
+        // 1. Buat Kloter Umroh 10 Bulan: April 2026 s/d Januari 2027
+        $kloter = Kloter::create([
+            'name' => 'Kloter Musim Syawal 1447H',
+            'code' => 'KLTR-LATE-2026',
+            'target_per_pax' => 35000000,
+            'monthly_per_pax' => 3500000,
+            'start_date' => Carbon::create(2026, 4, 1)->toDateString(),
+            'end_date' => Carbon::create(2027, 1, 31)->toDateString(),
+            'status' => 'active',
+        ]);
+
+        // 2. Jamaah A (Daftar & Disetujui April 2026)
+        $userA = User::factory()->create(['role' => 'jamaah', 'name' => 'Jamaah A Awal']);
+        $paxA = FamilyMember::create([
+            'user_id' => $userA->id,
+            'full_name' => 'Peserta Awal',
+            'relationship' => 'Diri Sendiri',
+        ]);
+        $regA = KloterRegistration::create([
+            'user_id' => $userA->id,
+            'kloter_id' => $kloter->id,
+            'status' => 'active',
+            'created_at' => Carbon::create(2026, 4, 1, 10, 0, 0),
+            'approved_at' => Carbon::create(2026, 4, 1, 11, 0, 0),
+        ]);
+        RegistrationPax::create([
+            'registration_id' => $regA->id,
+            'family_member_id' => $paxA->id,
+            'status' => 'active',
+        ]);
+
+        // 3. Jamaah B (Daftar & Disetujui Agustus 2026 - Late Joiner)
+        $userB = User::factory()->create(['role' => 'jamaah', 'name' => 'Jamaah B Susulan']);
+        $paxB = FamilyMember::create([
+            'user_id' => $userB->id,
+            'full_name' => 'Peserta Susulan',
+            'relationship' => 'Diri Sendiri',
+        ]);
+        $regB = KloterRegistration::create([
+            'user_id' => $userB->id,
+            'kloter_id' => $kloter->id,
+            'status' => 'active',
+            'created_at' => Carbon::create(2026, 8, 10, 9, 0, 0),
+            'approved_at' => Carbon::create(2026, 8, 10, 14, 0, 0),
+        ]);
+        RegistrationPax::create([
+            'registration_id' => $regB->id,
+            'family_member_id' => $paxB->id,
+            'status' => 'active',
+        ]);
+
+        // Cek helper methods model
+        $this->assertFalse($regA->isLateJoiner());
+        $this->assertEquals(0, $regA->getMissedInitialMonthsCount());
+        $this->assertEquals(0.0, $regA->getMissedInitialAmount());
+
+        $this->assertTrue($regB->isLateJoiner());
+        $this->assertEquals(4, $regB->getMissedInitialMonthsCount()); // April, Mei, Juni, Juli (4 bulan)
+        $this->assertEquals(14000000.0, $regB->getMissedInitialAmount()); // 4 * 3.5jt = 14jt
+
+        $billingService = app(BillingService::class);
+
+        // 4. Jalankan Billing April - Juli 2026 (4 bulan)
+        for ($m = 4; $m <= 7; $m++) {
+            $date = Carbon::create(2026, $m, 1);
+            $billingService->generateMonthlyInvoices($date);
+        }
+
+        // Tagihan April-Juli hanya terbit untuk Jamaah A (4 invoice), Jamaah B tidak ada sama sekali (0 invoice)
+        $this->assertEquals(4, Invoice::where('registration_id', $regA->id)->count());
+        $this->assertEquals(0, Invoice::where('registration_id', $regB->id)->count());
+
+        // 5. Jalankan Billing Agustus - Desember 2026 (5 bulan)
+        for ($m = 8; $m <= 12; $m++) {
+            $date = Carbon::create(2026, $m, 1);
+            $billingService->generateMonthlyInvoices($date);
+        }
+
+        // Cek invoice Agustus-Desember untuk Jamaah B: harus terbit 5 invoice normal (Rp 3.500.000 masing-masing)
+        $invoicesB = Invoice::where('registration_id', $regB->id)->get();
+        $this->assertEquals(5, $invoicesB->count());
+        foreach ($invoicesB as $inv) {
+            $this->assertEquals(3500000.0, (float) $inv->total_amount);
+        }
+
+        // Total akumulasi yang sudah tertagih untuk Jamaah B sebelum bulan terakhir = 5 * 3.5jt = Rp 17.500.000
+        $totalBilledBBeforeFinal = (float) Invoice::where('registration_id', $regB->id)->sum('total_amount');
+        $this->assertEquals(17500000.0, $totalBilledBBeforeFinal);
+
+        // 6. Jalankan Billing Bulan Terakhir (Januari 2027)
+        $finalBillingDate = Carbon::create(2027, 1, 1);
+        $billingService->generateMonthlyInvoices($finalBillingDate);
+
+        // Cek Invoice Terakhir Jamaah A: Rp 3.500.000 normal
+        $finalInvoiceA = Invoice::where('registration_id', $regA->id)
+            ->where('billing_year', 2027)
+            ->where('billing_month', 1)
+            ->first();
+        $this->assertNotNull($finalInvoiceA);
+        $this->assertEquals(3500000.0, (float) $finalInvoiceA->total_amount);
+        $this->assertEquals(35000000.0, (float) Invoice::where('registration_id', $regA->id)->sum('total_amount'));
+
+        // Cek Invoice Terakhir Jamaah B: Pelunasan sisa target = Rp 17.500.000 (3.5jt normal + 14jt catchup)
+        $finalInvoiceB = Invoice::where('registration_id', $regB->id)
+            ->where('billing_year', 2027)
+            ->where('billing_month', 1)
+            ->first();
+        $this->assertNotNull($finalInvoiceB);
+        $this->assertEquals(17500000.0, (float) $finalInvoiceB->total_amount);
+
+        // Periksa rincian item invoice terakhir Jamaah B
+        $itemsB = $finalInvoiceB->items;
+        $this->assertCount(2, $itemsB);
+
+        $normalItem = $itemsB->firstWhere('amount', 3500000.0);
+        $this->assertNotNull($normalItem);
+        $this->assertStringContainsString('Tabungan Umroh Bulan', $normalItem->description);
+
+        $catchupItem = $itemsB->firstWhere('amount', 14000000.0);
+        $this->assertNotNull($catchupItem);
+        $this->assertStringContainsString('Pelunasan Sisa Periode Awal Sebelum Bergabung', $catchupItem->description);
+
+        // Total akumulasi seluruh tagihan yang diterbitkan untuk Jamaah B genap tepat Rp 35.000.000 (100% target)!
+        $this->assertEquals(35000000.0, (float) Invoice::where('registration_id', $regB->id)->sum('total_amount'));
+
+        // 7. Verifikasi Tampilan Dasbor Jamaah B
+        $dashboardResponse = $this->actingAs($userB)->get(route('jamaah.dashboard'));
+        $dashboardResponse->assertStatus(200);
+        $dashboardResponse->assertSee('Pendaftaran Susulan (Bergabung di Tengah Periode Kloter)');
+        $dashboardResponse->assertSee('14.000.000');
     }
 }
 

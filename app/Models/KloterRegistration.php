@@ -2,10 +2,10 @@
 
 /**
  * File: app/Models/KloterRegistration.php
- * Tujuan: Model pendaftaran akun user ke kloter tertentu beserta status approval dan rekapitulasi capaian tabungan
+ * Tujuan: Model pendaftaran akun user ke kloter tertentu beserta status approval, rekapitulasi capaian tabungan, dan deteksi pendaftaran susulan (late joiner)
  * Dipakai Oleh: RegistrationController, RegistrationApprovalController, JamaahDashboardController, BillingService
  * Dependensi Utama: Illuminate\Database\Eloquent\Model, Kloter, User, RegistrationPax, Invoice, Payment
- * Daftar Fungsi Utama: kloter(), user(), approver(), approvedByAdmin(), paxes(), invoices(), payments(), isPending(), isActive(), isRejected(), getTotalSavedAttribute(), getTargetTotalAttribute()
+ * Daftar Fungsi Utama: kloter(), user(), approver(), paxes(), invoices(), payments(), isLateJoiner(), getMissedInitialMonthsCount(), getMissedInitialAmount(), getRemainingUnbilledAmount()
  * Side Effect: Query DB tabel kloter_registrations dan agregasi pembayaran
  */
 
@@ -34,6 +34,13 @@ class KloterRegistration extends Model
         'approved_at',
         'admin_notes',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'approved_at' => 'datetime',
+        ];
+    }
 
     public function isPending(): bool
     {
@@ -120,5 +127,50 @@ class KloterRegistration extends Model
         }
 
         return min(100.0, round(($this->total_saved / $target) * 100, 1));
+    }
+
+    /**
+     * Memeriksa apakah pendaftaran bergabung susulan (setelah bulan pertama kloter berjalan)
+     */
+    public function isLateJoiner(): bool
+    {
+        if (!$this->kloter || !$this->kloter->start_date) {
+            return false;
+        }
+        $joinDate = ($this->approved_at ?: $this->created_at)->copy()->startOfMonth();
+        $kloterStartDate = $this->kloter->start_date->copy()->startOfMonth();
+        return $joinDate->greaterThan($kloterStartDate);
+    }
+
+    /**
+     * Menghitung berapa bulan awal yang terlewat sebelum akun mendaftar/disetujui
+     */
+    public function getMissedInitialMonthsCount(): int
+    {
+        if (!$this->isLateJoiner()) {
+            return 0;
+        }
+        $joinDate = ($this->approved_at ?: $this->created_at)->copy()->startOfMonth();
+        $kloterStartDate = $this->kloter->start_date->copy()->startOfMonth();
+        return max(0, (int) round($kloterStartDate->diffInMonths($joinDate)));
+    }
+
+    /**
+     * Menghitung akumulasi nominal bulan awal yang belum ditagihkan untuk seluruh pax di pendaftaran ini
+     */
+    public function getMissedInitialAmount(): float
+    {
+        $paxCount = $this->active_pax_count ?: $this->total_pax;
+        $monthlyPerPax = (float) ($this->kloter?->monthly_per_pax ?? 0);
+        return (float) ($this->getMissedInitialMonthsCount() * $monthlyPerPax * $paxCount);
+    }
+
+    /**
+     * Menghitung sisa total target paket yang belum pernah diterbitkan tagihannya
+     */
+    public function getRemainingUnbilledAmount(): float
+    {
+        $totalBilled = (float) $this->invoices()->sum('total_amount');
+        return max(0, $this->target_total - $totalBilled);
     }
 }

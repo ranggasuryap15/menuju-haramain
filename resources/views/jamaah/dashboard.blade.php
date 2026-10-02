@@ -1,9 +1,9 @@
 <!--
 File: resources/views/jamaah/dashboard.blade.php
-Tujuan: Halaman dasbor jamaah untuk melihat progres tabungan keluarga, tagihan bulan berjalan, dan riwayat pembayaran
+Tujuan: Halaman dasbor jamaah untuk melihat progres tabungan keluarga, tagihan bulan berjalan, status kloter (termasuk info pendaftaran susulan / late joiner), dan riwayat pembayaran
 Dipakai Oleh: Jamaah\DashboardController@index (GET /jamaah/dashboard)
 Dependensi Utama: layouts.app, KloterRegistration, Invoice, Payment
-Daftar Komponen Utama: Kartu Progres Hijau-Emas, Antrean Tagihan Belum Terbayar (Mobile Card / Desktop Table), Ringkasan Pax Keluarga, Riwayat Mutasi Pembayaran
+Daftar Komponen Utama: Kartu Progres Hijau-Emas, Antrean Tagihan Belum Terbayar, Kartu Kloter (Info Late Joiner), Ringkasan Pax Keluarga, Riwayat Mutasi Pembayaran
 Side Effect: Render tampilan dashboard jamaah
 -->
 @extends('layouts.app')
@@ -171,6 +171,18 @@ Side Effect: Render tampilan dashboard jamaah
                                     @if($reg->admin_notes)
                                         <p class="text-[11px] text-red-700 pl-6">Alasan: "{{ $reg->admin_notes }}"</p>
                                     @endif
+                                </div>
+                            @endif
+
+                            @if($reg->isActive() && $reg->isLateJoiner())
+                                <div class="p-3 bg-blue-50/80 rounded-xl border border-blue-200 text-xs text-blue-900 space-y-1">
+                                    <div class="flex items-center space-x-2 font-bold text-blue-950">
+                                        <svg class="w-4 h-4 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                        <span>Pendaftaran Susulan (Bergabung di Tengah Periode Kloter)</span>
+                                    </div>
+                                    <p class="text-[11px] text-blue-800 leading-relaxed">
+                                        Anda bergabung setelah kloter berjalan (terlewat {{ $reg->getMissedInitialMonthsCount() }} bulan awal). Tagihan bulanan reguler dimulai sejak bulan Anda bergabung. Kekurangan biaya periode awal sebesar <strong>Rp {{ number_format($reg->getMissedInitialAmount(), 0, ',', '.') }}</strong> akan ditagihkan sekaligus sebagai pelunasan di bulan akhir kloter sebelum keberangkatan.
+                                    </p>
                                 </div>
                             @endif
 

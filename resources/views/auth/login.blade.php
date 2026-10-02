@@ -13,7 +13,7 @@ Side Effect: POST ke /login
 @section('content')
 <div class="max-w-md mx-auto my-6 sm:my-10">
     <div class="bg-white rounded-2xl shadow-xl border border-slate-200/80 overflow-hidden">
-        
+
         <!-- Header Banner -->
         <div class="bg-gradient-to-r from-[#346733] to-[#234622] p-6 text-white text-center relative overflow-hidden">
             <div class="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-[#D4AF37]/20 pointer-events-none"></div>
@@ -43,7 +43,6 @@ Side Effect: POST ke /login
                 <div>
                     <div class="flex items-center justify-between mb-1.5">
                         <label for="password" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Kata Sandi</label>
-                        <span class="text-[11px] text-slate-400">Default: password</span>
                     </div>
                     <input type="password" name="password" id="password" required
                         class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#346733] focus:border-[#346733] text-sm transition-all"
