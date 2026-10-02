@@ -1,9 +1,9 @@
 <?php
 /**
  * File: app/Http/Controllers/Jamaah/PaymentController.php
- * Tujuan: Memproses unggah bukti transfer manual dan pengajuan konfirmasi pembayaran oleh jamaah dengan validasi urutan pelunasan tagihan
+ * Tujuan: Memproses unggah bukti transfer manual dan pengajuan konfirmasi pembayaran oleh jamaah dengan validasi urutan pelunasan tagihan dan rekening bank kloter
  * Dipakai Oleh: routes/web.php (POST /jamaah/invoices/{invoice}/payments)
- * Dependensi Utama: App\Models\Invoice, App\Services\PaymentService, Auth, Request
+ * Dependensi Utama: App\Models\Invoice, App\Models\BankAccount, App\Services\PaymentService, Auth, Request, Rule
  * Daftar Fungsi Utama: store()
  * Side Effect: Upload file bukti ke storage publik, insert record payments (status pending)
  */
@@ -11,11 +11,13 @@
 namespace App\Http\Controllers\Jamaah;
 
 use App\Http\Controllers\Controller;
+use App\Models\BankAccount;
 use App\Models\Invoice;
 use App\Services\PaymentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class PaymentController extends Controller
 {
@@ -38,8 +40,13 @@ class PaymentController extends Controller
                 ));
         }
 
+        $kloter = $invoice->registration?->kloter;
+        $allowedBankIds = ($kloter && $kloter->bankAccounts()->active()->exists())
+            ? $kloter->bankAccounts()->active()->pluck('bank_accounts.id')->toArray()
+            : BankAccount::active()->pluck('id')->toArray();
+
         $validated = $request->validate([
-            'bank_account_id' => ['required', 'exists:bank_accounts,id'],
+            'bank_account_id' => ['required', Rule::in($allowedBankIds)],
             'amount' => ['required', 'numeric', 'min:10000'],
             'payment_date' => ['required', 'date'],
             'sender_bank' => ['nullable', 'string', 'max:100'],

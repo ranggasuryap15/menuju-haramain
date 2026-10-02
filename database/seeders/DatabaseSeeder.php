@@ -2,11 +2,11 @@
 
 /**
  * File: database/seeders/DatabaseSeeder.php
- * Tujuan: Seeder data awal untuk pengujian peran (Superadmin, Admin Keuangan, Jamaah), anggota keluarga, kloter, rekening bank, dan tagihan
+ * Tujuan: Seeder data awal untuk pengujian peran (Superadmin, Admin Keuangan, Jamaah), anggota keluarga, kloter dengan multi-rekening bank berbeda, dan tagihan
  * Dipakai Oleh: php artisan db:seed / php artisan migrate:fresh --seed
  * Dependensi Utama: User, FamilyMember, Kloter, KloterRegistration, RegistrationPax, BankAccount, BillingService
  * Daftar Fungsi Utama: run()
- * Side Effect: Insert data awal ke berbagai tabel database
+ * Side Effect: Insert data awal ke berbagai tabel database & pivot kloter_bank_account
  */
 
 namespace Database\Seeders;
@@ -152,7 +152,14 @@ class DatabaseSeeder extends Seeder
             'is_active' => true,
         ]);
 
-        // 4. Master Kloter Umroh (Beda Periode & Nominal)
+        $bankBcaSyariah = BankAccount::create([
+            'bank_name' => 'BCA Syariah',
+            'account_number' => '088-234-5566',
+            'account_holder' => 'PT Menuju Haramain Berkah',
+            'is_active' => true,
+        ]);
+
+        // 4. Master Kloter Umroh (Beda Periode, Nominal, & Rekening Bank)
         $kloterRamadhan = Kloter::create([
             'name' => 'Kloter Ramadhan Berkah 1448H (10 Bulan)',
             'code' => 'RAMADHAN-1448',
@@ -163,6 +170,8 @@ class DatabaseSeeder extends Seeder
             'description' => 'Paket Umroh iktikaf 10 hari terakhir Ramadhan bintang 5 di Makkah & Madinah.',
             'status' => 'active',
         ]);
+        // Tautkan BSI dan Muamalat ke Kloter Ramadhan
+        $kloterRamadhan->bankAccounts()->sync([$bankBsi->id, $bankMuamalat->id]);
 
         $kloterSyawal = Kloter::create([
             'name' => 'Kloter Reguler Syawal 1448H (12 Bulan)',
@@ -174,6 +183,8 @@ class DatabaseSeeder extends Seeder
             'description' => 'Paket Umroh santai pasca Idul Fitri bersama pembimbing ibadah berpengalaman.',
             'status' => 'active',
         ]);
+        // Tautkan BCA Syariah khusus ke Kloter Syawal
+        $kloterSyawal->bankAccounts()->sync([$bankBcaSyariah->id]);
 
         // 5. Pendaftaran Kloter
         // Ahmad mendaftar Kloter Ramadhan untuk 3 orang (Ahmad, Istri, Anak)

@@ -1,10 +1,10 @@
 {{--
 /**
  * File: resources/views/admin/kloters/show.blade.php
- * Tujuan: Menampilkan rincian detail master kloter umroh, agregat keuangan, tombol navigasi edit kloter, dan daftar pendaftar keluarga beserta anggota pax
+ * Tujuan: Menampilkan rincian detail master kloter umroh, agregat keuangan, daftar rekening bank penampung kloter, tombol navigasi edit kloter, dan daftar pendaftar keluarga beserta anggota pax
  * Dipakai Oleh: App\Http\Controllers\Admin\KloterController@show
- * Dependensi Utama: Tailwind CSS CDN, Alpine.js, App\Models\Kloter
- * Daftar Komponen Utama: Breadcrumb, Tombol aksi edit kloter & kembali, Metrik keuangan & agregasi pax kloter, informasi paket, tabel pendaftar keluarga, daftar rincian jiwa jamaah
+ * Dependensi Utama: Tailwind CSS CDN, Alpine.js, App\Models\Kloter, App\Models\BankAccount
+ * Daftar Komponen Utama: Breadcrumb, Tombol aksi edit kloter & kembali, Metrik keuangan & agregasi pax kloter, informasi paket, kartu rekening bank tujuan kloter, tabel pendaftar keluarga, daftar rincian jiwa jamaah
  * Side Effect: Tampilan detail kloter dan navigasi ke formulir edit kloter
  */
 --}}
@@ -126,6 +126,52 @@
             <div class="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-600">
                 <span class="font-semibold text-gray-800 block mb-1">Catatan / Deskripsi Fasilitas:</span>
                 <p>{{ $kloter->description }}</p>
+            </div>
+        @endif
+    </div>
+
+    <!-- Rekening Bank Tujuan Transfer Kloter -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h3 class="font-bold text-gray-900 text-base flex items-center gap-2">
+                    <svg class="w-5 h-5 text-haramain-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                    Rekening Bank Tujuan Pembayaran Kloter
+                </h3>
+                <p class="text-xs text-gray-500 mt-0.5">Rekening penampung dana tabungan umroh yang ditautkan khusus untuk kloter ini</p>
+            </div>
+            <a href="{{ route('admin.kloters.edit', $kloter) }}" class="text-xs font-bold text-[#346733] hover:underline flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                Kelola Rekening
+            </a>
+        </div>
+
+        @if($kloter->bankAccounts->isNotEmpty())
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                @foreach($kloter->bankAccounts as $bank)
+                    <div class="p-4 rounded-xl border border-gray-200 bg-gray-50/70 hover:bg-emerald-50/30 hover:border-emerald-200 transition">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-gray-900">{{ $bank->bank_name }}</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-bold {{ $bank->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600' }}">
+                                {{ $bank->is_active ? 'Aktif' : 'Nonaktif' }}
+                            </span>
+                        </div>
+                        <div class="font-mono text-base font-extrabold text-[#346733] mt-2">
+                            {{ $bank->account_number }}
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">
+                            a/n {{ $bank->account_holder }}
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        @else
+            <div class="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-3">
+                <svg class="w-5 h-5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <div>
+                    <span class="font-bold block">Belum Ada Rekening Bank Khusus yang Ditautkan</span>
+                    <p class="mt-0.5 text-amber-700">Secara otomatis, jamaah pada kloter ini akan disajikan semua rekening penampung aktif umum. Anda dapat memilih rekening khusus kloter ini melalui tombol <a href="{{ route('admin.kloters.edit', $kloter) }}" class="underline font-bold">Edit Kloter</a>.</p>
+                </div>
             </div>
         @endif
     </div>

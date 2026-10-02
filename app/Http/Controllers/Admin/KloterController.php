@@ -1,16 +1,17 @@
 <?php
 /**
  * File: app/Http/Controllers/Admin/KloterController.php
- * Tujuan: Manajemen master kloter tabungan umroh (pembuatan kloter, pengubahan detail kloter, rentang periode, tarif per pax, detail peserta kloter, rekapitulasi dana terkumpul riil, trigger billing)
+ * Tujuan: Manajemen master kloter tabungan umroh (pembuatan kloter, pengubahan detail kloter, normalisasi kode kloter selalu UPPERCASE, asosiasi multi-rekening bank per kloter, rentang periode, tarif per pax, detail peserta kloter, rekapitulasi dana terkumpul riil, trigger billing)
  * Dipakai Oleh: routes/web.php (/admin/kloters, /admin/kloters/create, /admin/kloters/{kloter}, /admin/kloters/{kloter}/edit, /admin/kloters/trigger-billing)
- * Dependensi Utama: App\Models\Kloter, App\Models\Payment, App\Services\BillingService, Request, Illuminate\Validation\Rule
+ * Dependensi Utama: App\Models\Kloter, App\Models\BankAccount, App\Models\Payment, App\Services\BillingService, Request, Illuminate\Validation\Rule
  * Daftar Fungsi Utama: index(), create(), store(), show(), edit(), update(), triggerBilling()
- * Side Effect: Write DB tabel kloters (insert/update), eksekusi pembuatan tagihan bulanan
+ * Side Effect: Write DB tabel kloters (insert/update uppercase code), pivot kloter_bank_account (sync), eksekusi pembuatan tagihan bulanan
  */
 
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\BankAccount;
 use App\Models\Kloter;
 use App\Models\Payment;
 use App\Services\BillingService;
@@ -27,6 +28,7 @@ class KloterController extends Controller
         $kloters = Kloter::query()
             ->withCount(['registrations'])
             ->with([
+                'bankAccounts',
                 'registrations.invoices.payments' => fn ($q) => $q->where('status', Payment::STATUS_APPROVED),
             ])
             ->orderBy('created_at', 'desc')
@@ -37,11 +39,17 @@ class KloterController extends Controller
 
     public function create(): View
     {
-        return view('admin.kloters.create');
+        $bankAccounts = BankAccount::where('is_active', true)->orderBy('bank_name')->get();
+
+        return view('admin.kloters.create', compact('bankAccounts'));
     }
 
     public function store(Request $request): RedirectResponse
     {
+        if ($request->has('code')) {
+            $request->merge(['code' => strtoupper(trim((string) $request->input('code')))]);
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'code' => ['required', 'string', 'max:50', 'unique:kloters,code'],
@@ -51,9 +59,38 @@ class KloterController extends Controller
             'end_date' => ['required', 'date', 'after:start_date'],
             'description' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,active,closed,completed'],
+            'bank_account_ids' => ['nullable', 'array'],
+            'bank_account_ids.*' => ['exists:bank_accounts,id'],
+            'new_bank_name' => ['nullable', 'string', 'max:100'],
+            'new_account_number' => ['nullable', 'string', 'max:50'],
+            'new_account_holder' => ['nullable', 'string', 'max:150'],
         ]);
 
-        Kloter::create($validated);
+        $kloterData = collect($validated)->except([
+            'bank_account_ids',
+            'new_bank_name',
+            'new_account_number',
+            'new_account_holder',
+        ])->toArray();
+
+        $kloter = Kloter::create($kloterData);
+
+        $bankAccountIds = $validated['bank_account_ids'] ?? [];
+
+        // Tambah rekening bank baru langsung bila field diisi lengkap
+        if (!empty($validated['new_bank_name']) && !empty($validated['new_account_number']) && !empty($validated['new_account_holder'])) {
+            $newBank = BankAccount::create([
+                'bank_name' => $validated['new_bank_name'],
+                'account_number' => $validated['new_account_number'],
+                'account_holder' => $validated['new_account_holder'],
+                'is_active' => true,
+            ]);
+            $bankAccountIds[] = $newBank->id;
+        }
+
+        if (!empty($bankAccountIds)) {
+            $kloter->bankAccounts()->sync(array_unique($bankAccountIds));
+        }
 
         return redirect()->route('admin.kloters.index')->with('success', 'Kloter baru berhasil dibuat.');
     }
@@ -61,6 +98,7 @@ class KloterController extends Controller
     public function show(Kloter $kloter): View
     {
         $kloter->load([
+            'bankAccounts',
             'registrations.user',
             'registrations.paxes.familyMember',
             'registrations.invoices.payments' => fn ($q) => $q->where('status', Payment::STATUS_APPROVED),
@@ -71,11 +109,18 @@ class KloterController extends Controller
 
     public function edit(Kloter $kloter): View
     {
-        return view('admin.kloters.edit', compact('kloter'));
+        $kloter->load('bankAccounts');
+        $bankAccounts = BankAccount::where('is_active', true)->orderBy('bank_name')->get();
+
+        return view('admin.kloters.edit', compact('kloter', 'bankAccounts'));
     }
 
     public function update(Request $request, Kloter $kloter): RedirectResponse
     {
+        if ($request->has('code')) {
+            $request->merge(['code' => strtoupper(trim((string) $request->input('code')))]);
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'code' => ['required', 'string', 'max:50', Rule::unique('kloters', 'code')->ignore($kloter->id)],
@@ -85,9 +130,36 @@ class KloterController extends Controller
             'end_date' => ['required', 'date', 'after:start_date'],
             'description' => ['nullable', 'string'],
             'status' => ['required', 'in:draft,active,closed,completed'],
+            'bank_account_ids' => ['nullable', 'array'],
+            'bank_account_ids.*' => ['exists:bank_accounts,id'],
+            'new_bank_name' => ['nullable', 'string', 'max:100'],
+            'new_account_number' => ['nullable', 'string', 'max:50'],
+            'new_account_holder' => ['nullable', 'string', 'max:150'],
         ]);
 
-        $kloter->update($validated);
+        $kloterData = collect($validated)->except([
+            'bank_account_ids',
+            'new_bank_name',
+            'new_account_number',
+            'new_account_holder',
+        ])->toArray();
+
+        $kloter->update($kloterData);
+
+        $bankAccountIds = $validated['bank_account_ids'] ?? [];
+
+        // Tambah rekening bank baru langsung bila field diisi lengkap
+        if (!empty($validated['new_bank_name']) && !empty($validated['new_account_number']) && !empty($validated['new_account_holder'])) {
+            $newBank = BankAccount::create([
+                'bank_name' => $validated['new_bank_name'],
+                'account_number' => $validated['new_account_number'],
+                'account_holder' => $validated['new_account_holder'],
+                'is_active' => true,
+            ]);
+            $bankAccountIds[] = $newBank->id;
+        }
+
+        $kloter->bankAccounts()->sync(array_unique($bankAccountIds));
 
         return redirect()->route('admin.kloters.show', $kloter)->with('success', 'Detail kloter berhasil diperbarui.');
     }

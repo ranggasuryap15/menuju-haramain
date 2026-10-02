@@ -23,6 +23,8 @@
  *   - test_kloter_update_validation()
  *   - test_notification_service_and_modal_popup_integration()
  *   - test_default_superadmin_always_exists_and_can_authenticate()
+ *   - test_kloter_can_have_distinct_bank_accounts_and_displayed_on_invoice()
+ *   - test_kloter_code_is_always_persisted_and_retrieved_in_uppercase()
  * Side Effect: Database read/write dalam transaction rollback
  */
 
@@ -1283,6 +1285,241 @@ class TabunganUmrohTest extends TestCase
 
         $response->assertRedirect(route('admin.dashboard'));
         $this->assertAuthenticatedAs($superadmin);
+    }
+
+    /**
+     * Memverifikasi setiap kloter dapat memiliki beberapa rekening bank tujuan yang berbeda,
+     * rekening khusus ditampilkan di halaman tagihan jamaah, dan admin dapat mengelolanya.
+     */
+    public function test_kloter_can_have_distinct_bank_accounts_and_displayed_on_invoice(): void
+    {
+        Storage::fake('public');
+
+        $superadmin = User::factory()->create(['role' => User::ROLE_SUPERADMIN]);
+        $jamaah = User::factory()->create(['role' => User::ROLE_JAMAAH]);
+
+        // Buat 3 Rekening Bank Berbeda
+        $bankA = BankAccount::create([
+            'bank_name' => 'Bank Mandiri Syariah Khusus',
+            'account_number' => '111-222-3333',
+            'account_holder' => 'Rekening Kloter A Official',
+            'is_active' => true,
+        ]);
+
+        $bankB = BankAccount::create([
+            'bank_name' => 'Bank BSI Khusus Kloter A',
+            'account_number' => '444-555-6666',
+            'account_holder' => 'Rekening BSI Kloter A',
+            'is_active' => true,
+        ]);
+
+        $bankC = BankAccount::create([
+            'bank_name' => 'Bank Muamalat Khusus Kloter B',
+            'account_number' => '777-888-9999',
+            'account_holder' => 'Rekening Muamalat Kloter B',
+            'is_active' => true,
+        ]);
+
+        // Buat Kloter A dan tautkan Bank A & B
+        $kloterA = Kloter::create([
+            'name' => 'Kloter Gold Premium Ramadhan',
+            'code' => 'KLTR-GOLD-01',
+            'target_per_pax' => 40000000,
+            'monthly_per_pax' => 4000000,
+            'start_date' => Carbon::now()->subMonths(1)->startOfMonth()->toDateString(),
+            'end_date' => Carbon::now()->addMonths(9)->endOfMonth()->toDateString(),
+            'status' => 'active',
+        ]);
+        $kloterA->bankAccounts()->sync([$bankA->id, $bankB->id]);
+
+        // Buat Kloter B dan tautkan Bank C
+        $kloterB = Kloter::create([
+            'name' => 'Kloter Silver Reguler Syawal',
+            'code' => 'KLTR-SLVR-02',
+            'target_per_pax' => 25000000,
+            'monthly_per_pax' => 2500000,
+            'start_date' => Carbon::now()->subMonths(1)->startOfMonth()->toDateString(),
+            'end_date' => Carbon::now()->addMonths(9)->endOfMonth()->toDateString(),
+            'status' => 'active',
+        ]);
+        $kloterB->bankAccounts()->sync([$bankC->id]);
+
+        // Daftarkan Jamaah ke Kloter A dan Kloter B
+        $regA = KloterRegistration::create([
+            'kloter_id' => $kloterA->id,
+            'user_id' => $jamaah->id,
+            'total_pax' => 1,
+            'status' => 'active',
+        ]);
+
+        $regB = KloterRegistration::create([
+            'kloter_id' => $kloterB->id,
+            'user_id' => $jamaah->id,
+            'total_pax' => 1,
+            'status' => 'active',
+        ]);
+
+        $invoiceA = Invoice::create([
+            'registration_id' => $regA->id,
+            'invoice_number' => 'INV-TEST-KLTR-A',
+            'billing_month' => Carbon::now()->month,
+            'billing_year' => Carbon::now()->year,
+            'billing_date' => Carbon::now()->startOfMonth()->toDateString(),
+            'due_date' => Carbon::now()->startOfMonth()->addDays(9)->toDateString(),
+            'total_amount' => 4000000,
+            'paid_amount' => 0,
+            'status' => Invoice::STATUS_UNPAID,
+        ]);
+
+        $invoiceB = Invoice::create([
+            'registration_id' => $regB->id,
+            'invoice_number' => 'INV-TEST-KLTR-B',
+            'billing_month' => Carbon::now()->month,
+            'billing_year' => Carbon::now()->year,
+            'billing_date' => Carbon::now()->startOfMonth()->toDateString(),
+            'due_date' => Carbon::now()->startOfMonth()->addDays(9)->toDateString(),
+            'total_amount' => 2500000,
+            'paid_amount' => 0,
+            'status' => Invoice::STATUS_UNPAID,
+        ]);
+
+        // 1. Jamaah melihat invoice Kloter A -> harus hanya menyajikan Bank A & Bank B
+        $responseA = $this->actingAs($jamaah)->get(route('jamaah.invoices.show', $invoiceA));
+        $responseA->assertStatus(200);
+        $responseA->assertSee('Bank Mandiri Syariah Khusus');
+        $responseA->assertSee('111-222-3333');
+        $responseA->assertSee('Bank BSI Khusus Kloter A');
+        $responseA->assertSee('444-555-6666');
+        $responseA->assertDontSee('Bank Muamalat Khusus Kloter B');
+
+        // 2. Jamaah melihat invoice Kloter B -> harus hanya menyajikan Bank C
+        $responseB = $this->actingAs($jamaah)->get(route('jamaah.invoices.show', $invoiceB));
+        $responseB->assertStatus(200);
+        $responseB->assertSee('Bank Muamalat Khusus Kloter B');
+        $responseB->assertSee('777-888-9999');
+        $responseB->assertDontSee('Bank Mandiri Syariah Khusus');
+        $responseB->assertDontSee('Bank BSI Khusus Kloter A');
+
+        // 3. Jamaah mencoba transfer invoice Kloter B ke Bank A (yang bukan milik Kloter B) -> harus divalidasi gagal
+        $proof = UploadedFile::fake()->image('bukti_transfer.jpg');
+        $invalidPayment = $this->actingAs($jamaah)->post(route('jamaah.payments.store', $invoiceB), [
+            'bank_account_id' => $bankA->id,
+            'amount' => 2500000,
+            'payment_date' => Carbon::now()->toDateString(),
+            'proof_file' => $proof,
+        ]);
+        $invalidPayment->assertSessionHasErrors(['bank_account_id']);
+
+        // 4. Jamaah transfer invoice Kloter B ke Bank C (rekening resmi Kloter B) -> harus berhasil
+        $validPayment = $this->actingAs($jamaah)->post(route('jamaah.payments.store', $invoiceB), [
+            'bank_account_id' => $bankC->id,
+            'amount' => 2500000,
+            'payment_date' => Carbon::now()->toDateString(),
+            'proof_file' => $proof,
+        ]);
+        $validPayment->assertRedirect(route('jamaah.invoices.show', $invoiceB));
+        $this->assertDatabaseHas('payments', [
+            'invoice_id' => $invoiceB->id,
+            'bank_account_id' => $bankC->id,
+            'amount' => 2500000,
+        ]);
+
+        // 5. Admin mengedit Kloter A: mengganti rekening ke Bank C dan menambah rekening baru on-the-fly
+        $updateResponse = $this->actingAs($superadmin)->put(route('admin.kloters.update', $kloterA), [
+            'name' => $kloterA->name,
+            'code' => $kloterA->code,
+            'target_per_pax' => $kloterA->target_per_pax,
+            'monthly_per_pax' => $kloterA->monthly_per_pax,
+            'start_date' => $kloterA->start_date->toDateString(),
+            'end_date' => $kloterA->end_date->toDateString(),
+            'status' => 'active',
+            'bank_account_ids' => [$bankC->id],
+            'new_bank_name' => 'Bank Mega Syariah OnTheFly',
+            'new_account_number' => '999-888-777',
+            'new_account_holder' => 'Rekening Baru Admin',
+        ]);
+        $updateResponse->assertRedirect(route('admin.kloters.show', $kloterA));
+
+        $newBankCreated = BankAccount::where('bank_name', 'Bank Mega Syariah OnTheFly')->first();
+        $this->assertNotNull($newBankCreated);
+        $this->assertEquals('999-888-777', $newBankCreated->account_number);
+
+        // Pastikan pivot Kloter A sekarang memiliki Bank C dan Bank baru
+        $kloterA->refresh();
+        $assignedBankIds = $kloterA->bankAccounts->pluck('id')->toArray();
+        $this->assertContains($bankC->id, $assignedBankIds);
+        $this->assertContains($newBankCreated->id, $assignedBankIds);
+        $this->assertNotContains($bankA->id, $assignedBankIds);
+
+        // 6. Admin melihat halaman detail Kloter A
+        $showResponse = $this->actingAs($superadmin)->get(route('admin.kloters.show', $kloterA));
+        $showResponse->assertStatus(200);
+        $showResponse->assertSee('Bank Mega Syariah OnTheFly');
+        $showResponse->assertSee('999-888-777');
+    }
+
+    /**
+     * Memverifikasi kode kloter selalu otomatis disimpan dan dibaca dalam format UPPERCASE,
+     * baik melalui Model Eloquent, form store admin, maupun form update admin.
+     */
+    public function test_kloter_code_is_always_persisted_and_retrieved_in_uppercase(): void
+    {
+        $superadmin = User::factory()->create(['role' => User::ROLE_SUPERADMIN]);
+
+        // 1. Pembuatan via Eloquent Model langsung dengan kode lowercase
+        $kloterModel = Kloter::create([
+            'name' => 'Kloter Test Mutator Lowercase',
+            'code' => 'kltr-mutator-test',
+            'target_per_pax' => 30000000,
+            'monthly_per_pax' => 3000000,
+            'start_date' => Carbon::now()->startOfMonth()->toDateString(),
+            'end_date' => Carbon::now()->addMonths(10)->endOfMonth()->toDateString(),
+            'status' => 'draft',
+        ]);
+
+        $this->assertEquals('KLTR-MUTATOR-TEST', $kloterModel->code);
+        $this->assertDatabaseHas('kloters', [
+            'id' => $kloterModel->id,
+            'code' => 'KLTR-MUTATOR-TEST',
+        ]);
+
+        // 2. Pembuatan via HTTP POST (admin.kloters.store) dengan input lowercase
+        $storeResponse = $this->actingAs($superadmin)->post(route('admin.kloters.store'), [
+            'name' => 'Kloter Test Form Store',
+            'code' => 'kltr-store-2027',
+            'target_per_pax' => 35000000,
+            'monthly_per_pax' => 3500000,
+            'start_date' => Carbon::now()->startOfMonth()->toDateString(),
+            'end_date' => Carbon::now()->addMonths(10)->endOfMonth()->toDateString(),
+            'status' => 'active',
+        ]);
+        $storeResponse->assertRedirect(route('admin.kloters.index'));
+
+        $this->assertDatabaseHas('kloters', [
+            'name' => 'Kloter Test Form Store',
+            'code' => 'KLTR-STORE-2027',
+        ]);
+        $createdKloter = Kloter::where('name', 'Kloter Test Form Store')->first();
+        $this->assertEquals('KLTR-STORE-2027', $createdKloter->code);
+
+        // 3. Pengubahan via HTTP PUT (admin.kloters.update) dengan input lowercase
+        $updateResponse = $this->actingAs($superadmin)->put(route('admin.kloters.update', $createdKloter), [
+            'name' => 'Kloter Test Form Store Updated',
+            'code' => 'kltr-updated-uppercase',
+            'target_per_pax' => 35000000,
+            'monthly_per_pax' => 3500000,
+            'start_date' => $createdKloter->start_date->toDateString(),
+            'end_date' => $createdKloter->end_date->toDateString(),
+            'status' => 'active',
+        ]);
+        $updateResponse->assertRedirect(route('admin.kloters.show', $createdKloter));
+
+        $this->assertDatabaseHas('kloters', [
+            'id' => $createdKloter->id,
+            'code' => 'KLTR-UPDATED-UPPERCASE',
+        ]);
+        $createdKloter->refresh();
+        $this->assertEquals('KLTR-UPDATED-UPPERCASE', $createdKloter->code);
     }
 }
 

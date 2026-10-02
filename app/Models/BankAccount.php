@@ -2,10 +2,10 @@
 /**
  * File: app/Models/BankAccount.php
  * Tujuan: Model rekening bank penampung tabungan umroh milik penyelenggara/travel
- * Dipakai Oleh: PaymentController, BankAccountController, JamaahBillingView
- * Dependensi Utama: Illuminate\Database\Eloquent\Model, Payment
- * Daftar Fungsi Utama: payments(), scopeActive()
- * Side Effect: Query DB tabel bank_accounts
+ * Dipakai Oleh: PaymentController, KloterController, InvoiceController, BankAccount
+ * Dependensi Utama: Illuminate\Database\Eloquent\Model, Payment, Kloter
+ * Daftar Fungsi Utama: payments(), kloters(), scopeActive()
+ * Side Effect: Query DB tabel bank_accounts dan pivot kloter_bank_account
  */
 
 namespace App\Models;
@@ -13,6 +13,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class BankAccount extends Model
@@ -31,6 +32,11 @@ class BankAccount extends Model
         return [
             'is_active' => 'boolean',
         ];
+    }
+
+    public function kloters(): BelongsToMany
+    {
+        return $this->belongsToMany(Kloter::class, 'kloter_bank_account')->withTimestamps();
     }
 
     public function payments(): HasMany

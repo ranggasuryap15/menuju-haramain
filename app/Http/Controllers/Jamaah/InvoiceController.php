@@ -1,11 +1,11 @@
 <?php
 /**
  * File: app/Http/Controllers/Jamaah/InvoiceController.php
- * Tujuan: Menampilkan daftar tagihan bulanan dengan preloading status penguncian kronologis dan halaman detail tagihan beserta instruksi transfer bagi jamaah
+ * Tujuan: Menampilkan daftar tagihan bulanan dengan preloading status penguncian kronologis dan halaman detail tagihan beserta rekening bank spesifik kloter/fallback
  * Dipakai Oleh: routes/web.php (/jamaah/invoices, /jamaah/invoices/{invoice})
  * Dependensi Utama: App\Models\Invoice, App\Models\BankAccount, Auth
  * Daftar Fungsi Utama: index(), show()
- * Side Effect: Query DB data invoice, invoice_items, bank_accounts, dan payments
+ * Side Effect: Query DB data invoice, invoice_items, bank_accounts, kloter_bank_account, dan payments
  */
 
 namespace App\Http\Controllers\Jamaah;
@@ -72,12 +72,15 @@ class InvoiceController extends Controller
         }
 
         $invoice->load([
-            'registration.kloter',
+            'registration.kloter.bankAccounts',
             'items.registrationPax.familyMember',
             'payments' => fn ($q) => $q->with('bankAccount')->latest(),
         ]);
 
-        $bankAccounts = BankAccount::active()->get();
+        $kloter = $invoice->registration?->kloter;
+        $bankAccounts = ($kloter && $kloter->bankAccounts->where('is_active', true)->isNotEmpty())
+            ? $kloter->bankAccounts->where('is_active', true)
+            : BankAccount::active()->get();
 
         return view('jamaah.invoices.show', compact('invoice', 'bankAccounts'));
     }

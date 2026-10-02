@@ -1,18 +1,20 @@
 <?php
 /**
  * File: app/Models/Kloter.php
- * Tujuan: Model master data kloter/paket umroh dengan target tabungan, akumulasi dana terkumpul, dan rentang tanggal periode
- * Dipakai Oleh: KloterController, BillingGenerateCommand, RegistrationController
- * Dependensi Utama: Illuminate\Database\Eloquent\Model, KloterRegistration, Invoice, Payment
- * Daftar Fungsi Utama: registrations(), invoices(), isActive(), getDurationMonthsAttribute(), getTotalPaidAttribute(), getTotalBilledAttribute()
- * Side Effect: Query DB tabel kloters, agregasi pembayaran masuk
+ * Tujuan: Model master data kloter/paket umroh dengan target tabungan, akumulasi dana terkumpul, rentang tanggal periode, mutator kode uppercase, dan relasi rekening bank kloter
+ * Dipakai Oleh: KloterController, BillingGenerateCommand, RegistrationController, InvoiceController
+ * Dependensi Utama: Illuminate\Database\Eloquent\Model, Illuminate\Database\Eloquent\Casts\Attribute, KloterRegistration, Invoice, Payment, BankAccount
+ * Daftar Fungsi Utama: registrations(), invoices(), bankAccounts(), code(), isActive(), getDurationMonthsAttribute(), getTotalPaidAttribute(), getTotalBilledAttribute()
+ * Side Effect: Query DB tabel kloters, agregasi pembayaran masuk, relasi pivot kloter_bank_account
  */
 
 namespace App\Models;
 
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
@@ -39,6 +41,22 @@ class Kloter extends Model
             'start_date' => 'date',
             'end_date' => 'date',
         ];
+    }
+
+    /**
+     * Memastikan kode kloter selalu tersimpan dan dibaca dalam format UPPERCASE
+     */
+    protected function code(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => $value ? strtoupper($value) : $value,
+            set: fn (?string $value) => $value ? strtoupper(trim($value)) : $value,
+        );
+    }
+
+    public function bankAccounts(): BelongsToMany
+    {
+        return $this->belongsToMany(BankAccount::class, 'kloter_bank_account')->withTimestamps();
     }
 
     public function registrations(): HasMany

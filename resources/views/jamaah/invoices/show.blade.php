@@ -1,9 +1,9 @@
 <!--
 File: resources/views/jamaah/invoices/show.blade.php
-Tujuan: Halaman detail rincian tagihan per pax, breakdown alokasi FIFO (kredit kelebihan sebelumnya/surplus), daftar rekening bank, banner penguncian tagihan kronologis, form upload bukti transfer, dan riwayat pembayaran
+Tujuan: Halaman detail rincian tagihan per pax, breakdown alokasi FIFO (kredit kelebihan sebelumnya/surplus), daftar rekening bank spesifik kloter/fallback, banner penguncian tagihan kronologis, form upload bukti transfer, dan riwayat pembayaran
 Dipakai Oleh: Jamaah\InvoiceController@show (GET /jamaah/invoices/{invoice})
-Dependensi Utama: layouts.app, Invoice, BankAccount, Payment
-Daftar Komponen Utama: Rincian item per orang, Ringkasan alokasi & saldo kredit, Widget rekening bank transfer, Banner penguncian kronologis, Formulir upload bukti struk + preview, Status verifikasi admin
+Dependensi Utama: layouts.app, Invoice, BankAccount, Payment, Kloter
+Daftar Komponen Utama: Rincian item per orang, Ringkasan alokasi & saldo kredit, Widget rekening bank transfer kloter, Banner penguncian kronologis, Formulir upload bukti struk + preview, Status verifikasi admin
 Side Effect: POST ke /jamaah/invoices/{invoice}/payments
 -->
 @extends('layouts.app')
@@ -340,6 +340,14 @@ Side Effect: POST ke /jamaah/invoices/{invoice}/payments
                     <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M4 10v7h3v-7H4zm6 0v7h3v-7h-3zm6 0v7h3v-7h-3zM2 22h19v-3H2v3zm9.5-20L2 6v2h19V6l-9.5-4z"/></svg>
                     <span class="text-xs font-black uppercase tracking-wider">Rekening Resmi Pembayaran</span>
                 </div>
+
+                @if($invoice->registration?->kloter?->bankAccounts->where('is_active', true)->isNotEmpty())
+                    <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/15 text-[11px] text-emerald-100 border border-white/20">
+                        <svg class="w-3.5 h-3.5 text-[#D4AF37]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                        <span>Rekening Kloter: <strong class="text-white">{{ $invoice->registration->kloter->name }}</strong></span>
+                    </div>
+                @endif
+
                 <p class="text-xs text-emerald-100">
                     Silakan transfer tepat sesuai nominal sisa tagihan ke salah satu rekening resmi berikut:
                 </p>
