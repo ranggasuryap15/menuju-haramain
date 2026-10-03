@@ -75,6 +75,7 @@ Route::middleware(['auth'])->prefix('jamaah')->name('jamaah.')->group(function (
     Route::get('/invoices', [InvoiceController::class, 'index'])->name('invoices.index');
     Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
     Route::post('/invoices/{invoice}/payments', [PaymentController::class, 'store'])->name('payments.store');
+    Route::delete('/payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');
 });
 
 // Area Admin Keuangan & Superadmin
@@ -86,6 +87,7 @@ Route::middleware(['auth', 'role:superadmin,admin_keuangan'])->prefix('admin')->
     Route::get('/payments/{payment}', [PaymentApprovalController::class, 'show'])->name('payments.show');
     Route::post('/payments/{payment}/approve', [PaymentApprovalController::class, 'approve'])->name('payments.approve');
     Route::post('/payments/{payment}/reject', [PaymentApprovalController::class, 'reject'])->name('payments.reject');
+    Route::post('/payments/{payment}/revert', [PaymentApprovalController::class, 'revertToPending'])->name('payments.revert');
 
     // Antrean Approval Pendaftaran Kloter
     Route::get('/registrations', [RegistrationApprovalController::class, 'index'])->name('registrations.index');
