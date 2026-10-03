@@ -1,11 +1,11 @@
 <?php
 /**
  * File: app/Http/Controllers/Admin/PaymentApprovalController.php
- * Tujuan: Manajemen antrean verifikasi bukti transfer manual oleh admin keuangan dengan mitigasi self-approval
- * Dipakai Oleh: routes/web.php (/admin/payments, /admin/payments/{payment}/approve, /admin/payments/{payment}/reject)
+ * Tujuan: Manajemen antrean verifikasi bukti transfer manual oleh admin keuangan dengan mitigasi self-approval dan fitur revisi/pembatalan verifikasi
+ * Dipakai Oleh: routes/web.php (/admin/payments, /admin/payments/{payment}/approve, /admin/payments/{payment}/reject, /admin/payments/{payment}/revert)
  * Dependensi Utama: App\Models\Payment, App\Services\PaymentService, Auth, Request
- * Daftar Fungsi Utama: index(), show(), approve(), reject()
- * Side Effect: Update status payments, rekonsiliasi invoice, audit log verifikator
+ * Daftar Fungsi Utama: index(), show(), approve(), reject(), revertToPending()
+ * Side Effect: Update status payments, rekonsiliasi saldo invoice, audit log verifikator
  */
 
 namespace App\Http\Controllers\Admin;
@@ -68,7 +68,7 @@ class PaymentApprovalController extends Controller
         try {
             $paymentService->approvePayment($payment, $admin);
 
-            return redirect()->route('admin.payments.index')
+            return redirect()->route('admin.payments.show', $payment)
                 ->with('success', 'Pembayaran sebesar Rp ' . number_format($payment->amount, 0, ',', '.') . ' berhasil disetujui (Approved).');
         } catch (ValidationException $e) {
             return back()->with('error', $e->getMessage());
@@ -86,8 +86,26 @@ class PaymentApprovalController extends Controller
         try {
             $paymentService->rejectPayment($payment, $admin, $request->input('admin_notes'));
 
-            return redirect()->route('admin.payments.index')
-                ->with('success', 'Pembayaran telah ditolak (Rejected) dan alasan dicatat.');
+            return redirect()->route('admin.payments.show', $payment)
+                ->with('success', 'Pembayaran telah ditolak (Rejected) dan alasan penolakan dicatat.');
+        } catch (ValidationException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function revertToPending(Request $request, Payment $payment, PaymentService $paymentService): RedirectResponse
+    {
+        $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $admin = Auth::user();
+
+        try {
+            $paymentService->revertPaymentToPending($payment, $admin, $request->input('reason'));
+
+            return redirect()->route('admin.payments.show', $payment)
+                ->with('success', 'Verifikasi berhasil dibatalkan dan status pembayaran dikembalikan ke antrean peninjauan (Pending).');
         } catch (ValidationException $e) {
             return back()->with('error', $e->getMessage());
         }

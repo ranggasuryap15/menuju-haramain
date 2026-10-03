@@ -1,11 +1,11 @@
 <?php
 /**
  * File: app/Http/Controllers/Jamaah/PaymentController.php
- * Tujuan: Memproses unggah bukti transfer manual dan pengajuan konfirmasi pembayaran oleh jamaah dengan validasi urutan pelunasan tagihan dan rekening bank kloter
- * Dipakai Oleh: routes/web.php (POST /jamaah/invoices/{invoice}/payments)
- * Dependensi Utama: App\Models\Invoice, App\Models\BankAccount, App\Services\PaymentService, Auth, Request, Rule
- * Daftar Fungsi Utama: store()
- * Side Effect: Upload file bukti ke storage publik, insert record payments (status pending)
+ * Tujuan: Memproses unggah bukti transfer manual, pengajuan konfirmasi pembayaran, serta pembatalan/penghapusan pengajuan pembayaran salah upload oleh jamaah
+ * Dipakai Oleh: routes/web.php (POST /jamaah/invoices/{invoice}/payments, DELETE /jamaah/payments/{payment})
+ * Dependensi Utama: App\Models\Invoice, App\Models\Payment, App\Models\BankAccount, App\Services\PaymentService, Auth, Request, Rule
+ * Daftar Fungsi Utama: store(), destroy()
+ * Side Effect: Upload/delete file bukti di storage publik, insert/delete record payments, sinkronisasi status invoice
  */
 
 namespace App\Http\Controllers\Jamaah;
@@ -13,11 +13,13 @@ namespace App\Http\Controllers\Jamaah;
 use App\Http\Controllers\Controller;
 use App\Models\BankAccount;
 use App\Models\Invoice;
+use App\Models\Payment;
 use App\Services\PaymentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class PaymentController extends Controller
 {
@@ -63,6 +65,27 @@ class PaymentController extends Controller
 
         return redirect()->route('jamaah.invoices.show', $invoice)
             ->with('success', 'Bukti transfer berhasil dikirim. Menunggu verifikasi admin keuangan.');
+    }
+
+    public function destroy(Payment $payment, PaymentService $paymentService): RedirectResponse
+    {
+        $user = Auth::user();
+
+        if ($payment->user_id !== $user->id) {
+            abort(403);
+        }
+
+        $invoice = $payment->invoice;
+
+        try {
+            $paymentService->deletePendingPaymentByJamaah($payment, $user);
+
+            return redirect()->route('jamaah.invoices.show', $invoice)
+                ->with('success', 'Pengajuan bukti transfer yang salah berhasil dibatalkan dan dihapus. Silakan unggah bukti yang benar.');
+        } catch (ValidationException $e) {
+            return redirect()->route('jamaah.invoices.show', $invoice)
+                ->with('error', $e->getMessage());
+        }
     }
 }
 

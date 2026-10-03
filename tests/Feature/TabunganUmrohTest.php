@@ -40,6 +40,8 @@
  *   - test_superadmin_can_delete_jamaah_with_cascade_and_storage_cleanup()
  *   - test_kloter_whatsapp_group_url_management_and_payment_wa_reminder()
  *   - test_jamaah_invoice_tabs_and_sorting_unpaid_asc_paid_desc()
+ *   - test_admin_and_superadmin_can_revert_or_revise_payment_verification()
+ *   - test_jamaah_can_cancel_and_delete_wrong_pending_payment_proof()
  * Side Effect: Database read/write dalam transaction rollback
  */
 
@@ -609,7 +611,7 @@ class TabunganUmrohTest extends TestCase
         $this->actingAs($verifyingAdmin);
 
         $response = $this->post(route('admin.payments.approve', $payment));
-        $response->assertRedirect(route('admin.payments.index'));
+        $response->assertRedirect(route('admin.payments.show', $payment));
 
         // Cek status Payment menjadi approved dan verifikator tercatat
         $payment->refresh();
@@ -2850,6 +2852,227 @@ class TabunganUmrohTest extends TestCase
         $posDec = strpos($paidContent, 'INV-PAID-12-DEC');
         $posNov = strpos($paidContent, 'INV-PAID-11-NOV');
         $this->assertTrue($posDec !== false && $posNov !== false && $posDec < $posNov, 'Tagihan sudah lunas harus diurutkan secara Descending (periode terbaru di atas).');
+    }
+
+    /**
+     * 36. Test Admin / Superadmin dapat membatalkan / merevisi verifikasi pembayaran (Revisi status verifikasi & rekonsiliasi invoice)
+     */
+    public function test_admin_and_superadmin_can_revert_or_revise_payment_verification(): void
+    {
+        Storage::fake('public');
+
+        $jamaah = User::factory()->create(['role' => User::ROLE_JAMAAH]);
+        $admin1 = User::factory()->create(['role' => User::ROLE_ADMIN_KEUANGAN]);
+        $admin2 = User::factory()->create(['role' => User::ROLE_SUPERADMIN]);
+
+        $kloter = Kloter::create([
+            'name' => 'Kloter Revisi Test',
+            'code' => 'KLT-REV',
+            'start_date' => Carbon::create(2026, 1, 1),
+            'end_date' => Carbon::create(2026, 12, 1),
+            'target_per_pax' => 36000000,
+            'monthly_per_pax' => 3000000,
+            'quota' => 45,
+            'status' => 'active',
+        ]);
+
+        $bank = BankAccount::create([
+            'bank_name' => 'Bank Syariah Mandiri',
+            'account_number' => '9988776655',
+            'account_holder' => 'Yayasan Menuju Haramain',
+            'is_active' => true,
+        ]);
+
+        $reg = KloterRegistration::create([
+            'user_id' => $jamaah->id,
+            'kloter_id' => $kloter->id,
+            'total_pax' => 1,
+            'target_total' => 36000000,
+            'status' => KloterRegistration::STATUS_ACTIVE,
+            'approved_at' => now(),
+            'approved_by' => $admin1->id,
+        ]);
+
+        $inv = Invoice::create([
+            'registration_id' => $reg->id,
+            'invoice_number' => 'INV-REV-01',
+            'billing_year' => 2026,
+            'billing_month' => 1,
+            'billing_date' => Carbon::create(2026, 1, 1),
+            'due_date' => Carbon::create(2026, 1, 10),
+            'total_amount' => 3000000,
+            'paid_amount' => 0,
+            'status' => Invoice::STATUS_UNPAID,
+        ]);
+
+        $file = UploadedFile::fake()->image('transfer_asli.jpg');
+        $filePath = $file->store('payment-proofs/2026/01', 'public');
+
+        $payment = Payment::create([
+            'invoice_id' => $inv->id,
+            'user_id' => $jamaah->id,
+            'bank_account_id' => $bank->id,
+            'amount' => 3000000,
+            'payment_date' => Carbon::create(2026, 1, 5),
+            'proof_path' => $filePath,
+            'status' => Payment::STATUS_PENDING,
+        ]);
+
+        // 1. Admin 1 menyetujui (Approve) pembayaran
+        $approveResponse = $this->actingAs($admin1)->post(route('admin.payments.approve', $payment));
+        $approveResponse->assertRedirect(route('admin.payments.show', $payment));
+
+        $payment->refresh();
+        $inv->refresh();
+        $this->assertEquals(Payment::STATUS_APPROVED, $payment->status);
+        $this->assertEquals(3000000, $inv->paid_amount);
+        $this->assertEquals(Invoice::STATUS_PAID, $inv->status);
+
+        // 2. Admin 2 (Superadmin) merevisi / membatalkan status verifikasi kembali ke Pending
+        $revertResponse = $this->actingAs($admin2)->post(route('admin.payments.revert', $payment), [
+            'reason' => 'Mutasi bank belum masuk, perlu konfirmasi teller',
+        ]);
+        $revertResponse->assertRedirect(route('admin.payments.show', $payment));
+
+        $payment->refresh();
+        $inv->refresh();
+        $this->assertEquals(Payment::STATUS_PENDING, $payment->status);
+        $this->assertNull($payment->verified_at);
+        $this->assertStringContainsString('Mutasi bank belum masuk', $payment->admin_notes);
+        // Tagihan invoice harus otomatis kembali ke belum lunas karena dana pending belum dihitung
+        $this->assertEquals(0, $inv->paid_amount);
+        $this->assertNotEquals(Invoice::STATUS_PAID, $inv->status);
+
+        // 3. Admin 1 kemudian menolak (Reject) setelah pemeriksaan
+        $rejectResponse = $this->actingAs($admin1)->post(route('admin.payments.reject', $payment), [
+            'admin_notes' => 'Struk transfer palsu atau mutasi tidak ditemukan',
+        ]);
+        $rejectResponse->assertRedirect(route('admin.payments.show', $payment));
+
+        $payment->refresh();
+        $this->assertEquals(Payment::STATUS_REJECTED, $payment->status);
+        $this->assertEquals('Struk transfer palsu atau mutasi tidak ditemukan', $payment->admin_notes);
+
+        // 4. Admin 2 merevisi pembayaran yang ditolak menjadi disetujui kembali (jika jamaah melampirkan klarifikasi)
+        $approveAgainResponse = $this->actingAs($admin2)->post(route('admin.payments.approve', $payment));
+        $approveAgainResponse->assertRedirect(route('admin.payments.show', $payment));
+
+        $payment->refresh();
+        $inv->refresh();
+        $this->assertEquals(Payment::STATUS_APPROVED, $payment->status);
+        $this->assertEquals(3000000, $inv->paid_amount);
+        $this->assertEquals(Invoice::STATUS_PAID, $inv->status);
+
+        // 5. Mitigasi anti self-approval / self-revert: jamaah yang juga admin tidak boleh merevisi pembayarannya sendiri
+        $jamaahAdmin = User::factory()->create(['role' => User::ROLE_ADMIN_KEUANGAN]);
+        $paymentSelf = Payment::create([
+            'invoice_id' => $inv->id,
+            'user_id' => $jamaahAdmin->id,
+            'bank_account_id' => $bank->id,
+            'amount' => 1000000,
+            'payment_date' => Carbon::create(2026, 1, 5),
+            'proof_path' => $filePath,
+            'status' => Payment::STATUS_APPROVED,
+        ]);
+
+        $selfRevertResponse = $this->actingAs($jamaahAdmin)->post(route('admin.payments.revert', $paymentSelf), [
+            'reason' => 'Mau revisi transaksi sendiri',
+        ]);
+        $selfRevertResponse->assertSessionHas('error');
+    }
+
+    /**
+     * 37. Test Jama'ah dapat membatalkan dan menghapus bukti pembayaran pending yang salah upload
+     */
+    public function test_jamaah_can_cancel_and_delete_wrong_pending_payment_proof(): void
+    {
+        Storage::fake('public');
+
+        $jamaah1 = User::factory()->create(['role' => User::ROLE_JAMAAH]);
+        $jamaah2 = User::factory()->create(['role' => User::ROLE_JAMAAH]);
+
+        $kloter = Kloter::create([
+            'name' => 'Kloter Hapus Bukti Test',
+            'code' => 'KLT-HAPUS',
+            'start_date' => Carbon::create(2026, 1, 1),
+            'end_date' => Carbon::create(2026, 12, 1),
+            'target_per_pax' => 36000000,
+            'monthly_per_pax' => 3000000,
+            'quota' => 45,
+            'status' => 'active',
+        ]);
+
+        $bank = BankAccount::create([
+            'bank_name' => 'BSI',
+            'account_number' => '1234567890',
+            'account_holder' => 'Yayasan Menuju Haramain',
+            'is_active' => true,
+        ]);
+
+        $reg = KloterRegistration::create([
+            'user_id' => $jamaah1->id,
+            'kloter_id' => $kloter->id,
+            'total_pax' => 1,
+            'target_total' => 36000000,
+            'status' => KloterRegistration::STATUS_ACTIVE,
+            'approved_at' => now(),
+        ]);
+
+        $inv = Invoice::create([
+            'registration_id' => $reg->id,
+            'invoice_number' => 'INV-HAPUS-01',
+            'billing_year' => 2026,
+            'billing_month' => 1,
+            'billing_date' => Carbon::create(2026, 1, 1),
+            'due_date' => Carbon::create(2026, 1, 10),
+            'total_amount' => 3000000,
+            'paid_amount' => 0,
+            'status' => Invoice::STATUS_UNPAID,
+        ]);
+
+        // Simpan file bukti transfer palsu / salah upload
+        $file = UploadedFile::fake()->image('salah_struk.jpg');
+        $filePath = $file->store('payment-proofs/2026/01', 'public');
+        Storage::disk('public')->assertExists($filePath);
+
+        $payment = Payment::create([
+            'invoice_id' => $inv->id,
+            'user_id' => $jamaah1->id,
+            'bank_account_id' => $bank->id,
+            'amount' => 3000000,
+            'payment_date' => Carbon::create(2026, 1, 5),
+            'proof_path' => $filePath,
+            'status' => Payment::STATUS_PENDING,
+        ]);
+
+        // 1. Jamaah lain tidak boleh menghapus pembayaran milik jamaah 1 (Forbidden)
+        $unauthorizedResponse = $this->actingAs($jamaah2)->delete(route('jamaah.payments.destroy', $payment));
+        $unauthorizedResponse->assertStatus(403);
+        $this->assertDatabaseHas('payments', ['id' => $payment->id]);
+
+        // 2. Pemilik pembayaran (Jamaah 1) menghapus bukti transfer yang pending
+        $deleteResponse = $this->actingAs($jamaah1)->delete(route('jamaah.payments.destroy', $payment));
+        $deleteResponse->assertRedirect(route('jamaah.invoices.show', $inv));
+        $deleteResponse->assertSessionHas('success');
+
+        // Record harus terhapus dari database dan file fisik terhapus dari storage
+        $this->assertDatabaseMissing('payments', ['id' => $payment->id]);
+        Storage::disk('public')->assertMissing($filePath);
+
+        // 3. Pembayaran yang sudah disetujui (Approved) TIDAK BOLEH dihapus oleh jamaah
+        $approvedPayment = Payment::create([
+            'invoice_id' => $inv->id,
+            'user_id' => $jamaah1->id,
+            'bank_account_id' => $bank->id,
+            'amount' => 3000000,
+            'payment_date' => Carbon::create(2026, 1, 5),
+            'proof_path' => $filePath,
+            'status' => Payment::STATUS_APPROVED,
+        ]);
+
+        $cannotDeleteApprovedResponse = $this->actingAs($jamaah1)->delete(route('jamaah.payments.destroy', $approvedPayment));
+        $cannotDeleteApprovedResponse->assertSessionHas('error');
+        $this->assertDatabaseHas('payments', ['id' => $approvedPayment->id]);
     }
 }
 
