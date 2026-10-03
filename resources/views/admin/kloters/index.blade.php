@@ -71,7 +71,7 @@
                         <div class="space-y-1.5 text-gray-600">
                             <div class="flex items-center justify-between">
                                 <span class="text-gray-500">Rentang Periode:</span>
-                                <span class="font-medium text-gray-800">{{ $startDate->format('M Y') }} - {{ $endDate->format('M Y') }} ({{ $durationMonths }} Bln)</span>
+                                <span class="font-medium text-gray-800">{{ $startDate->format('Y-m-d') }} s/d {{ $endDate->format('Y-m-d') }} ({{ $durationMonths }} Bln)</span>
                             </div>
                             <div class="flex items-center justify-between">
                                 <span class="text-gray-500">Keluarga Terdaftar:</span>

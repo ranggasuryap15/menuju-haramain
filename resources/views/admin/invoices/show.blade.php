@@ -38,7 +38,7 @@
                 @endif
             </div>
             <p class="text-xs sm:text-sm text-slate-500 mt-0.5">
-                Periode Tabungan: <strong class="text-slate-800">{{ $invoice->period_label }}</strong> &bull; Terbit: {{ $invoice->billing_date->translatedFormat('d F Y') }}
+                Periode Tabungan: <strong class="text-slate-800">{{ $invoice->period_label }}</strong> &bull; Terbit: {{ $invoice->billing_date->format('Y-m-d') }}
             </p>
         </div>
         <div class="flex items-center gap-2">
@@ -72,7 +72,7 @@
 
         <div class="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs">
             <span class="text-xs text-slate-500 font-bold uppercase tracking-wider block mb-1">Batas Jatuh Tempo</span>
-            <span class="text-xl font-black text-slate-900">{{ $invoice->due_date ? $invoice->due_date->format('d/m/Y') : '-' }}</span>
+            <span class="text-xl font-black text-slate-900">{{ $invoice->due_date ? $invoice->due_date->format('Y-m-d') : '-' }}</span>
             <span class="text-[11px] {{ $invoice->due_date && $invoice->due_date->isPast() && !$invoice->isPaid() ? 'text-red-600 font-bold' : 'text-slate-400' }} block mt-1">
                 {{ $invoice->due_date && $invoice->due_date->isPast() && !$invoice->isPaid() ? 'Telah melewati batas tempo' : 'Tanggal 10 bulan berjalan' }}
             </span>
@@ -229,9 +229,9 @@
                             <td class="py-3 px-4 text-slate-400 font-mono">{{ $index + 1 }}</td>
                             <td class="py-3 px-4">
                                 <span class="font-bold text-slate-900 block">
-                                    {{ $payment->payment_date ? $payment->payment_date->translatedFormat('d M Y') : '-' }}
+                                    {{ $payment->payment_date ? $payment->payment_date->format('Y-m-d') : '-' }}
                                 </span>
-                                <span class="text-[11px] text-slate-400">Input: {{ $payment->created_at->format('d/m/Y H:i') }}</span>
+                                <span class="text-[11px] text-slate-400">Input: {{ $payment->created_at->format('Y-m-d H:i') }}</span>
                             </td>
                             <td class="py-3 px-4 font-bold text-sm text-[#346733]">
                                 Rp {{ number_format($payment->amount, 0, ',', '.') }}

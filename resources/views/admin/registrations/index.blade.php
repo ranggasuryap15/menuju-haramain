@@ -175,7 +175,7 @@ Side Effect: POST ke /admin/registrations/{registration}/approve dan reject
                 @forelse($registrations as $reg)
                     <tr class="hover:bg-slate-50 transition-colors">
                         <td class="py-3.5 px-4 text-slate-500 whitespace-nowrap">
-                            {{ $reg->created_at->format('d/m/Y') }}
+                            {{ $reg->created_at->format('Y-m-d') }}
                             <span class="block text-[10px] text-slate-400">{{ $reg->created_at->format('H:i') }} WIB</span>
                         </td>
                         <td class="py-3.5 px-4">

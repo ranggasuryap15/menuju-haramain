@@ -97,7 +97,7 @@ Side Effect: POST ke /jamaah/registrations
                                         </div>
                                         <p class="text-xs text-slate-500 mt-1">{{ $k->description }}</p>
                                         <div class="text-[11px] text-slate-600 mt-2 flex flex-wrap gap-x-4 gap-y-1">
-                                            <span>Periode: <strong>{{ $k->start_date->format('d M Y') }} s/d {{ $k->end_date->format('d M Y') }}</strong></span>
+                                            <span>Periode: <strong>{{ $k->start_date->format('Y-m-d') }} s/d {{ $k->end_date->format('Y-m-d') }}</strong></span>
                                             <span>Durasi: <strong>{{ $k->duration_months }} Bulan</strong></span>
                                         </div>
                                     </div>

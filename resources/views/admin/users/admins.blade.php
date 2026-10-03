@@ -193,7 +193,7 @@ Side Effect: Form submit POST /admin/users/admin, PUT /admin/users/{user}, PUT /
 
                             <!-- Tanggal Terdaftar -->
                             <td class="py-3.5 px-4 text-slate-500 text-[11px]">
-                                {{ $admin->created_at->format('d M Y') }}
+                                {{ $admin->created_at->format('Y-m-d') }}
                                 <span class="block text-[10px] text-slate-400">{{ $admin->created_at->diffForHumans() }}</span>
                             </td>
 

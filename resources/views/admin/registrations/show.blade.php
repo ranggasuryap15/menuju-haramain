@@ -24,7 +24,7 @@ Side Effect: POST ke /admin/registrations/{registration}/approve dan reject
                 <h1 class="text-xl sm:text-2xl font-black text-slate-900">Pendaftaran Kloter {{ $registration->kloter->code }}</h1>
             </div>
             <p class="text-xs sm:text-sm text-slate-500 mt-1">
-                Diajukan pada: <strong>{{ $registration->created_at->isoFormat('dddd, D MMMM Y • HH:mm') }} WIB</strong>
+                Diajukan pada: <strong>{{ $registration->created_at->format('Y-m-d H:i') }} WIB</strong>
             </p>
         </div>
 
@@ -186,7 +186,7 @@ Side Effect: POST ke /admin/registrations/{registration}/approve dan reject
                     </div>
                     <div>
                         <span class="text-slate-400 block">Jadwal Menabung:</span>
-                        <span class="font-medium text-slate-700">{{ $registration->kloter->start_date->format('d M Y') }} s/d {{ $registration->kloter->end_date->format('d M Y') }}</span>
+                        <span class="font-medium text-slate-700">{{ $registration->kloter->start_date->format('Y-m-d') }} s/d {{ $registration->kloter->end_date->format('Y-m-d') }}</span>
                     </div>
                 </div>
             </div>
@@ -205,7 +205,7 @@ Side Effect: POST ke /admin/registrations/{registration}/approve dan reject
                         </div>
                         <p class="text-[11px] text-emerald-700">
                             Disetujui oleh: <strong>{{ $registration->approver->name ?? 'Admin' }}</strong><br>
-                            Waktu: {{ $registration->approved_at ? $registration->approved_at->isoFormat('D MMMM Y • HH:mm') . ' WIB' : '-' }}
+                            Waktu: {{ $registration->approved_at ? $registration->approved_at->format('Y-m-d H:i') . ' WIB' : '-' }}
                         </p>
                     </div>
                 @elseif($registration->isRejected())
@@ -216,7 +216,7 @@ Side Effect: POST ke /admin/registrations/{registration}/approve dan reject
                         </div>
                         <p class="text-[11px] text-red-700">
                             Ditolak oleh: <strong>{{ $registration->approver->name ?? 'Admin' }}</strong><br>
-                            Waktu: {{ $registration->approved_at ? $registration->approved_at->isoFormat('D MMMM Y • HH:mm') . ' WIB' : '-' }}
+                            Waktu: {{ $registration->approved_at ? $registration->approved_at->format('Y-m-d H:i') . ' WIB' : '-' }}
                         </p>
                         @if($registration->admin_notes)
                             <div class="mt-2 pt-2 border-t border-red-200 text-[11px]">

@@ -130,7 +130,7 @@
             <div>
                 <h3 class="font-bold text-base">Penagihan Bulanan Khusus: {{ $kloter->name }}</h3>
                 <p class="text-xs text-white/80 mt-0.5">
-                    Tarif Rp {{ number_format($kloter->monthly_per_pax, 0, ',', '.') }}/pax per bulan &bull; Periode: {{ $startDate->isoFormat('MMMM Y') }} s/d {{ $endDate->isoFormat('MMMM Y') }}.
+                    Tarif Rp {{ number_format($kloter->monthly_per_pax, 0, ',', '.') }}/pax per bulan &bull; Periode: {{ $startDate->format('Y-m-d') }} s/d {{ $endDate->format('Y-m-d') }}.
                     Penerbitan tagihan dikelola tersendiri per kloter sesuai kesiapan masing-masing kloter.
                 </p>
             </div>
@@ -153,11 +153,11 @@
             </div>
             <div class="p-3 bg-gray-50 rounded-xl">
                 <span class="text-gray-500 block">Tanggal Mulai:</span>
-                <span class="font-semibold text-gray-900 text-sm">{{ $startDate->isoFormat('D MMMM Y') }}</span>
+                <span class="font-semibold text-gray-900 text-sm">{{ $startDate->format('Y-m-d') }}</span>
             </div>
             <div class="p-3 bg-gray-50 rounded-xl">
                 <span class="text-gray-500 block">Tanggal Selesai / Berangkat:</span>
-                <span class="font-semibold text-gray-900 text-sm">{{ $endDate->isoFormat('D MMMM Y') }}</span>
+                <span class="font-semibold text-gray-900 text-sm">{{ $endDate->format('Y-m-d') }}</span>
             </div>
             <div class="p-3 bg-gray-50 rounded-xl">
                 <span class="text-gray-500 block">Durasi Menabung:</span>
@@ -300,16 +300,16 @@
                             <td class="px-6 py-4">
                                 <div class="font-bold text-gray-900">{{ $registration->user->name }}</div>
                                 <div class="text-xs text-gray-500">{{ $registration->user->email }} • {{ $registration->user->phone ?? '-' }}</div>
-                                <div class="text-[11px] text-gray-400 mt-0.5">Daftar: {{ $registration->created_at->isoFormat('D MMM Y') }}</div>
+                                <div class="text-[11px] text-gray-400 mt-0.5">Daftar: {{ $registration->created_at->format('Y-m-d') }}</div>
                                 @if($registration->isLateJoiner())
                                     <div class="mt-1">
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                                            Susulan: Mulai {{ $registration->getEffectiveStartBillingDate()->locale('id')->translatedFormat('F Y') }}
+                                            Susulan: Mulai {{ $registration->getEffectiveStartBillingDate()->format('Y-m-d') }}
                                         </span>
                                     </div>
                                 @else
                                     <div class="text-[10px] text-emerald-700 font-medium mt-0.5">
-                                        Tagihan dari awal kloter ({{ $kloter->start_date->locale('id')->translatedFormat('M Y') }})
+                                        Tagihan dari awal kloter ({{ $kloter->start_date->format('Y-m-d') }})
                                     </div>
                                 @endif
                             </td>
@@ -410,7 +410,7 @@
                         </div>
                         <div class="text-right text-[11px] text-slate-500">
                             <span>Tgl Bayar:</span>
-                            <span class="font-semibold text-slate-700 block">{{ $payment->payment_date ? $payment->payment_date->locale('id')->translatedFormat('d M Y') : '-' }}</span>
+                            <span class="font-semibold text-slate-700 block">{{ $payment->payment_date ? $payment->payment_date->format('Y-m-d') : '-' }}</span>
                         </div>
                     </div>
 
@@ -463,10 +463,10 @@
                             </td>
                             <td class="px-4 py-3.5">
                                 <div class="font-bold text-gray-900">
-                                    {{ $payment->payment_date ? $payment->payment_date->locale('id')->translatedFormat('d M Y') : '-' }}
+                                    {{ $payment->payment_date ? $payment->payment_date->format('Y-m-d') : '-' }}
                                 </div>
                                 <div class="text-[11px] text-gray-400">
-                                    Input: {{ $payment->created_at->format('d/m/Y H:i') }}
+                                    Input: {{ $payment->created_at->format('Y-m-d H:i') }}
                                 </div>
                             </td>
                             <td class="px-4 py-3.5">

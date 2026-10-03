@@ -183,7 +183,7 @@ Side Effect: PUT ke /profile (update biodata) dan PUT ke /profile/password (upda
                 <div class="text-xs space-y-2 text-slate-600">
                     <div class="flex justify-between">
                         <span class="text-slate-400">Terdaftar Sejak:</span>
-                        <span class="font-medium text-slate-800">{{ $user->created_at->format('d M Y') }}</span>
+                        <span class="font-medium text-slate-800">{{ $user->created_at->format('Y-m-d') }}</span>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-slate-400">Anggota Keluarga:</span>

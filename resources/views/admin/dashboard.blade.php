@@ -150,7 +150,7 @@ Side Effect: Menampilkan agregasi data keuangan dan navigasi approval
                 <tbody class="divide-y divide-slate-100">
                     @forelse($pendingPayments as $p)
                         <tr class="hover:bg-slate-50 transition-colors">
-                            <td class="py-3 px-4 font-semibold text-slate-800">{{ $p->payment_date->format('d/m/Y') }}</td>
+                            <td class="py-3 px-4 font-semibold text-slate-800">{{ $p->payment_date->format('Y-m-d') }}</td>
                             <td class="py-3 px-4">
                                 <span class="font-bold text-slate-900 block">{{ $p->user->name }}</span>
                                 <span class="text-[11px] text-slate-500">{{ $p->user->email }}</span>
@@ -208,7 +208,7 @@ Side Effect: Menampilkan agregasi data keuangan dan navigasi approval
                     </div>
                     <h3 class="text-sm font-bold text-slate-900">{{ $k->name }}</h3>
                     <div class="text-xs text-slate-500 space-y-1">
-                        <div>Periode: {{ $k->start_date->format('d M Y') }} s/d {{ $k->end_date->format('d M Y') }}</div>
+                        <div>Periode: {{ $k->start_date->format('Y-m-d') }} s/d {{ $k->end_date->format('Y-m-d') }}</div>
                         <div>Target / Pax: <strong>Rp {{ number_format($k->target_per_pax, 0, ',', '.') }}</strong> (Tagihan: Rp {{ number_format($k->monthly_per_pax, 0, ',', '.') }}/bln)</div>
                     </div>
                     <div class="pt-2 border-t border-slate-200 flex items-center justify-between text-xs">

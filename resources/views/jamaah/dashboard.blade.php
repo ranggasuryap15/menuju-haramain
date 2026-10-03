@@ -92,7 +92,7 @@
                         </div>
 
                         <div class="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
-                            <span class="text-[11px] text-slate-500">Jatuh tempo: {{ $inv->due_date->format('d M Y') }}</span>
+                            <span class="text-[11px] text-slate-500">Jatuh tempo: {{ $inv->due_date->format('Y-m-d') }}</span>
                             <a href="{{ route('jamaah.invoices.show', $inv) }}" class="inline-flex items-center px-3 py-1.5 rounded-lg bg-[#346733] hover:bg-[#234622] text-white text-xs font-bold shadow-sm transition-colors">
                                 Bayar & Upload Bukti &rarr;
                             </a>
@@ -146,7 +146,7 @@
                                     </div>
                                     <h3 class="text-base font-bold text-slate-900 mt-1">{{ $reg->kloter->name }}</h3>
                                     <p class="text-xs text-slate-500">
-                                        Periode: {{ $reg->kloter->start_date->format('d M Y') }} s/d {{ $reg->kloter->end_date->format('d M Y') }}
+                                        Periode: {{ $reg->kloter->start_date->format('Y-m-d') }} s/d {{ $reg->kloter->end_date->format('Y-m-d') }}
                                         ({{ $reg->kloter->duration_months }} Bulan)
                                     </p>
                                 </div>
@@ -245,7 +245,7 @@
                         @forelse($recentPayments as $p)
                             <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-xs font-bold text-slate-700">{{ $p->payment_date->format('d M Y') }}</span>
+                                    <span class="text-xs font-bold text-slate-700">{{ $p->payment_date->format('Y-m-d') }}</span>
                                     @if($p->isApproved())
                                         <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">Disetujui</span>
                                     @elseif($p->isPending())
@@ -291,7 +291,7 @@
                         <tbody class="divide-y divide-slate-100">
                             @forelse($recentPayments as $p)
                                 <tr class="hover:bg-slate-50/80 transition-colors">
-                                    <td class="py-3 px-4 font-semibold text-slate-800">{{ $p->payment_date->format('d M Y') }}</td>
+                                    <td class="py-3 px-4 font-semibold text-slate-800">{{ $p->payment_date->format('Y-m-d') }}</td>
                                     <td class="py-3 px-4 text-slate-600">{{ $p->invoice?->invoice_number }}</td>
                                     <td class="py-3 px-4 text-slate-600">{{ $p->bankAccount?->bank_name }}</td>
                                     <td class="py-3 px-4 font-bold text-slate-900">Rp {{ number_format($p->amount, 0, ',', '.') }}</td>

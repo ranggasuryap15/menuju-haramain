@@ -155,7 +155,7 @@ Side Effect: POST ke /jamaah/family, PUT ke /jamaah/family/{id}, DELETE ke /jama
                                         <span>Gender: {{ $m->gender === 'L' ? 'Laki-laki' : ($m->gender === 'P' ? 'Perempuan' : '-') }}</span>
                                         @if($m->birth_date)
                                             <span>&bull;</span>
-                                            <span>Lahir: {{ $m->birth_date->format('d/m/Y') }}</span>
+                                            <span>Lahir: {{ $m->birth_date->format('Y-m-d') }}</span>
                                         @endif
                                     </div>
                                     <div class="mt-1">

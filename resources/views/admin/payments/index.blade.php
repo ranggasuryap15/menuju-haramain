@@ -130,7 +130,7 @@ Side Effect: Menampilkan daftar transaksi dan tautan verifikasi
                         $isSelfPayment = ($p->user_id === auth()->id());
                     @endphp
                     <tr class="hover:bg-slate-50 transition-colors {{ $isSelfPayment ? 'bg-amber-50/30' : '' }}">
-                        <td class="py-3 px-4 font-semibold text-slate-800">{{ $p->payment_date->format('d/m/Y') }}</td>
+                        <td class="py-3 px-4 font-semibold text-slate-800">{{ $p->payment_date->format('Y-m-d') }}</td>
                         <td class="py-3 px-4">
                             <span class="font-bold text-slate-900 block">{{ $p->user->name }}</span>
                             <span class="text-[11px] text-slate-500">{{ $p->user->email }}</span>

@@ -17,7 +17,7 @@
     $latestPayment = $invoice->payments->first();
     $amountFormatted = 'Rp ' . number_format($latestPayment ? $latestPayment->amount : $invoice->remaining_amount, 0, ',', '.');
     $bankName = $latestPayment?->bankAccount?->bank_name ?? ($latestPayment?->sender_bank ?? 'Rekening Bank Resmi');
-    $paymentDateFormatted = $latestPayment ? $latestPayment->payment_date->format('d/m/Y') : now()->format('d/m/Y');
+    $paymentDateFormatted = $latestPayment ? $latestPayment->payment_date->format('Y-m-d') : now()->format('Y-m-d');
     $jamaahName = auth()->user()->name;
     $kloterName = $invoice->registration?->kloter?->name ?? '-';
     $invoiceNum = $invoice->invoice_number;
@@ -55,7 +55,7 @@
                 <h1 class="text-xl sm:text-2xl font-black text-slate-900">{{ $invoice->invoice_number }}</h1>
             </div>
             <p class="text-xs sm:text-sm text-slate-500 mt-1">
-                Tagihan Periode: <strong>{{ $invoice->period_label }}</strong> &bull; Jatuh Tempo: <strong>{{ $invoice->due_date->format('d M Y') }}</strong>
+                Tagihan Periode: <strong>{{ $invoice->period_label }}</strong> &bull; Jatuh Tempo: <strong>{{ $invoice->due_date->format('Y-m-d') }}</strong>
             </p>
         </div>
 
@@ -375,7 +375,7 @@
                     @forelse($invoice->payments as $p)
                         <div class="py-3 space-y-2">
                             <div class="flex items-center justify-between">
-                                <span class="text-xs font-bold text-slate-800">{{ $p->payment_date->format('d M Y') }}</span>
+                                <span class="text-xs font-bold text-slate-800">{{ $p->payment_date->format('Y-m-d') }}</span>
                                 @if($p->isApproved())
                                     <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">Disetujui</span>
                                 @elseif($p->isPending())

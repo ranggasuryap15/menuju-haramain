@@ -214,7 +214,7 @@
                     </div>
 
                     <div class="text-[11px] text-slate-500 flex items-center justify-between pt-1">
-                        <span>Jatuh Tempo: <strong>{{ $inv->due_date ? $inv->due_date->format('d/m/Y') : '-' }}</strong></span>
+                        <span>Jatuh Tempo: <strong>{{ $inv->due_date ? $inv->due_date->format('Y-m-d') : '-' }}</strong></span>
                         @if($inv->payments->where('status', 'pending')->isNotEmpty())
                             <span class="text-amber-700 font-bold bg-amber-100 px-1.5 py-0.5 rounded text-[10px]">Menunggu Approval</span>
                         @endif
@@ -306,7 +306,7 @@
                             </td>
                             <td class="py-3.5 px-4">
                                 <div class="{{ $isOverdue ? 'text-red-700 font-bold' : 'text-slate-700 font-medium' }}">
-                                    {{ $inv->due_date ? $inv->due_date->format('d/m/Y') : '-' }}
+                                    {{ $inv->due_date ? $inv->due_date->format('Y-m-d') : '-' }}
                                 </div>
                                 @if($isOverdue)
                                     <span class="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold bg-red-100 text-red-800 mt-0.5">

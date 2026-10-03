@@ -879,7 +879,7 @@ Side Effect: Render HTML shell, navigasi antarmuka, modal notifikasi real-time, 
                                                         Sisa: <span class="font-extrabold text-rose-600">Rp {{ number_format($remaining, 0, ',', '.') }}</span>
                                                     </div>
                                                     <div class="text-[10px] text-slate-400 mt-0.5">
-                                                        Kloter: {{ $invoice->registration->kloter->name ?? '-' }} &bull; Jatuh Tempo: {{ \Carbon\Carbon::parse($invoice->due_date)->translatedFormat('d M Y') }}
+                                                        Kloter: {{ $invoice->registration->kloter->name ?? '-' }} &bull; Jatuh Tempo: {{ \Carbon\Carbon::parse($invoice->due_date)->format('Y-m-d') }}
                                                     </div>
                                                 </div>
                                                 <a href="{{ route('jamaah.invoices.show', $invoice) }}" class="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs whitespace-nowrap transition">

@@ -129,7 +129,7 @@
                     </div>
                     <div class="py-3 flex justify-between items-center">
                         <span class="text-gray-500">Tanggal Transfer</span>
-                        <span class="font-medium text-gray-900">{{ \Carbon\Carbon::parse($payment->payment_date)->isoFormat('dddd, D MMMM Y') }}</span>
+                        <span class="font-medium text-gray-900">{{ \Carbon\Carbon::parse($payment->payment_date)->format('Y-m-d') }}</span>
                     </div>
                     <div class="py-3 flex justify-between items-center">
                         <span class="text-gray-500">Jamaah / Pembayar</span>
@@ -178,7 +178,7 @@
                     </div>
                     <div class="py-3 flex justify-between items-center">
                         <span class="text-gray-500">Waktu Kirim Konfirmasi</span>
-                        <span class="text-xs text-gray-600">{{ $payment->created_at->isoFormat('D MMM Y, HH:mm') }} WIB</span>
+                        <span class="text-xs text-gray-600">{{ $payment->created_at->format('Y-m-d H:i') }} WIB</span>
                     </div>
                 </div>
             </div>
@@ -194,7 +194,7 @@
                             Telah Diverifikasi & Disetujui
                         </div>
                         <p class="text-xs text-green-700">Oleh: <strong>{{ $payment->verifier->name ?? 'Admin Keuangan' }}</strong></p>
-                        <p class="text-xs text-green-600 mt-0.5">Waktu: {{ $payment->verified_at ? \Carbon\Carbon::parse($payment->verified_at)->isoFormat('D MMMM Y, HH:mm') . ' WIB' : '-' }}</p>
+                        <p class="text-xs text-green-600 mt-0.5">Waktu: {{ $payment->verified_at ? \Carbon\Carbon::parse($payment->verified_at)->format('Y-m-d H:i') . ' WIB' : '-' }}</p>
                     </div>
                 @elseif($payment->status === 'rejected')
                     <div class="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -203,7 +203,7 @@
                             Pembayaran Ditolak
                         </div>
                         <p class="text-xs text-red-700">Oleh: <strong>{{ $payment->verifier->name ?? 'Admin Keuangan' }}</strong></p>
-                        <p class="text-xs text-red-600 mt-0.5">Waktu: {{ $payment->verified_at ? \Carbon\Carbon::parse($payment->verified_at)->isoFormat('D MMMM Y, HH:mm') . ' WIB' : '-' }}</p>
+                        <p class="text-xs text-red-600 mt-0.5">Waktu: {{ $payment->verified_at ? \Carbon\Carbon::parse($payment->verified_at)->format('Y-m-d H:i') . ' WIB' : '-' }}</p>
                         @if($payment->admin_notes)
                             <div class="mt-2 pt-2 border-t border-red-200 text-xs text-red-800">
                                 <strong>Alasan Penolakan:</strong>
