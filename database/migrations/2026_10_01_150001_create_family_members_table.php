@@ -24,7 +24,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('full_name');
             $table->string('relationship', 50)->default('Kepala Keluarga');
-            $table->string('identity_number', 50)->nullable()->comment('NIK atau Nomor Paspor');
+            $table->text('identity_number')->nullable()->comment('NIK atau Nomor Paspor terenkripsi (UU PDP)');
             $table->date('birth_date')->nullable();
             $table->enum('gender', ['L', 'P'])->nullable();
             $table->string('phone', 30)->nullable();

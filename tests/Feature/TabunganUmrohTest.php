@@ -1,4 +1,5 @@
 <?php
+
 /**
  * File: tests/Feature/TabunganUmrohTest.php
  * Tujuan: Feature test suite menyeluruh untuk sistem Tabungan Umroh Menuju Haramain
@@ -42,6 +43,7 @@
  *   - test_jamaah_invoice_tabs_and_sorting_unpaid_asc_paid_desc()
  *   - test_admin_and_superadmin_can_revert_or_revise_payment_verification()
  *   - test_jamaah_can_cancel_and_delete_wrong_pending_payment_proof()
+ *   - test_identity_number_nik_is_encrypted_in_database_according_to_pdp_law()
  * Side Effect: Database read/write dalam transaction rollback
  */
 
@@ -61,6 +63,7 @@ use App\Services\PaymentService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -201,10 +204,12 @@ class TabunganUmrohTest extends TestCase
             'id' => $member->id,
             'user_id' => $user1->id,
             'full_name' => 'Fatimah Az-Zahra Updated',
-            'identity_number' => '3201019901889999',
             'birth_date' => '1992-05-20 00:00:00',
             'phone' => '089988776655',
         ]);
+
+        $member->refresh();
+        $this->assertEquals('3201019901889999', $member->identity_number);
     }
 
     /**
@@ -1133,7 +1138,7 @@ class TabunganUmrohTest extends TestCase
         $resPostSep->assertSessionHas('success');
 
         $paymentSep = Payment::where('invoice_id', $invoiceSep->id)->firstOrFail();
-        
+
         // Admin memverifikasi pembayaran September
         $paymentService = app(PaymentService::class);
         $paymentService->approvePayment($paymentSep, $admin);
@@ -2734,7 +2739,7 @@ class TabunganUmrohTest extends TestCase
         // 7. Buka halaman detail tagihan jamaah
         $invoiceShowResponse = $this->actingAs($jamaah)->get(route('jamaah.invoices.show', $invoice));
         $invoiceShowResponse->assertStatus(200);
-        
+
         // Verifikasi keberadaan banner reminder WhatsApp admin & link grup WhatsApp kloter
         $invoiceShowResponse->assertSee('Bukti Transfer Sedang Diverifikasi Admin');
         $invoiceShowResponse->assertSee('Kirim Reminder ke WA Admin');
@@ -3074,8 +3079,57 @@ class TabunganUmrohTest extends TestCase
         $cannotDeleteApprovedResponse->assertSessionHas('error');
         $this->assertDatabaseHas('payments', ['id' => $approvedPayment->id]);
     }
+
+    /**
+     * Test enkripsi data kependudukan (NIK) di database sesuai UU PDP No. 27 Tahun 2022
+     */
+    public function test_identity_number_nik_is_encrypted_in_database_according_to_pdp_law(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_JAMAAH]);
+        $plainNik = '3271010101900001';
+
+        // 1. Simpan anggota keluarga dengan NIK
+        $member = FamilyMember::create([
+            'user_id' => $user->id,
+            'full_name' => 'Ahmad Sholihin',
+            'relationship' => 'Kepala Keluarga',
+            'gender' => 'L',
+            'identity_number' => $plainNik,
+            'birth_date' => Carbon::create(1990, 1, 1),
+            'phone' => '081299887766',
+        ]);
+
+        // 2. Verifikasi raw database value: Harus dalam bentuk ciphertext (tidak boleh plaintext)
+        $rawDatabaseValue = DB::table('family_members')->where('id', $member->id)->value('identity_number');
+        $this->assertNotNull($rawDatabaseValue);
+        $this->assertNotEquals($plainNik, $rawDatabaseValue, 'NIK di database tidak boleh disimpan dalam bentuk plaintext!');
+        $this->assertStringNotContainsString($plainNik, $rawDatabaseValue, 'Ciphertext database tidak boleh mengekspos NIK plaintext!');
+
+        // 3. Verifikasi payload enkripsi Laravel standar (dapat didekripsi oleh Crypt facade)
+        $decryptedManually = Crypt::decryptString($rawDatabaseValue);
+        $this->assertEquals($plainNik, $decryptedManually, 'Ciphertext harus dapat didekripsi menggunakan APP_KEY Laravel!');
+
+        // 4. Verifikasi akses Model Eloquent: Otomatis terdekripsi transparan
+        $member->refresh();
+        $this->assertEquals($plainNik, $member->identity_number);
+
+        // 5. Verifikasi penginputan via Form Web Jamaah
+        $this->actingAs($user);
+        $newNik = '3174051508950002';
+        $response = $this->post(route('jamaah.family.store'), [
+            'full_name' => 'Aisyah Humaira',
+            'relationship' => 'Anak',
+            'gender' => 'P',
+            'identity_number' => $newNik,
+            'birth_date' => '1995-08-15',
+        ]);
+        $response->assertRedirect(route('jamaah.family.index'));
+
+        $createdMember = FamilyMember::where('user_id', $user->id)->where('full_name', 'Aisyah Humaira')->first();
+        $this->assertNotNull($createdMember);
+
+        $rawCreatedDbValue = DB::table('family_members')->where('id', $createdMember->id)->value('identity_number');
+        $this->assertNotEquals($newNik, $rawCreatedDbValue);
+        $this->assertEquals($newNik, $createdMember->identity_number);
+    }
 }
-
-
-
-

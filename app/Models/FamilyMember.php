@@ -1,11 +1,11 @@
 <?php
 /**
  * File: app/Models/FamilyMember.php
- * Tujuan: Model data anggota keluarga/peserta di bawah akun penanggung jawab
+ * Tujuan: Model data anggota keluarga/peserta di bawah akun penanggung jawab dengan enkripsi data pribadi NIK sesuai UU PDP No. 27 Tahun 2022
  * Dipakai Oleh: FamilyMemberController, RegistrationController, InvoiceService
  * Dependensi Utama: Illuminate\Database\Eloquent\Model, User, RegistrationPax
  * Daftar Fungsi Utama: user(), registrationPaxes()
- * Side Effect: Query DB tabel family_members
+ * Side Effect: Query DB tabel family_members dengan enkripsi/dekripsi otomatis identity_number
  */
 
 namespace App\Models;
@@ -32,6 +32,7 @@ class FamilyMember extends Model
     protected function casts(): array
     {
         return [
+            'identity_number' => 'encrypted',
             'birth_date' => 'date',
         ];
     }
