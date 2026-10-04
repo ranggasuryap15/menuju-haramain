@@ -1,9 +1,9 @@
 <!--
 File: resources/views/jamaah/family/index.blade.php
-Tujuan: Halaman pengelolaan anggota keluarga/peserta (suami, istri, anak) di dalam satu akun penanggung jawab beserta fitur penambahan, pengubahan data (modal edit), dan penghapusan
+Tujuan: Halaman pengelolaan anggota keluarga/peserta (suami, istri, anak) di dalam satu akun penanggung jawab beserta fitur penambahan, pengubahan data (modal edit), indikator keamanan enkripsi NIK (UU PDP), dan penghapusan
 Dipakai Oleh: Jamaah\FamilyMemberController@index (GET /jamaah/family)
 Dependensi Utama: layouts.app, FamilyMember, Alpine.js
-Daftar Komponen Utama: Form tambah anggota keluarga, Kartu daftar anggota terdaftar, Tombol Edit & Modal Popup Edit Anggota, Tombol Hapus, Status keikutsertaan kloter
+Daftar Komponen Utama: Form tambah anggota keluarga dengan info enkripsi NIK, Kartu daftar anggota terdaftar, Tombol Edit & Modal Popup Edit Anggota, Tombol Hapus, Status keikutsertaan kloter
 Side Effect: POST ke /jamaah/family, PUT ke /jamaah/family/{id}, DELETE ke /jamaah/family/{id}
 -->
 @extends('layouts.app')
@@ -57,7 +57,7 @@ Side Effect: POST ke /jamaah/family, PUT ke /jamaah/family/{id}, DELETE ke /jama
             <div class="border-b border-slate-100 pb-3">
                 <h2 class="text-sm font-bold text-slate-900 flex items-center space-x-2">
                     <span class="p-1.5 rounded-lg bg-emerald-100 text-[#346733]">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        <svg class="w-4 h-4 fill-none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     </span>
                     <span>Tambah Anggota Baru</span>
                 </h2>
@@ -89,10 +89,20 @@ Side Effect: POST ke /jamaah/family, PUT ke /jamaah/family/{id}, DELETE ke /jama
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Nomor NIK / Paspor</label>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Nomor NIK / Paspor</label>
+                        <span class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200" title="Data NIK disimpan dengan enkripsi AES-256 terstandar UU PDP">
+                            <svg class="w-3 h-3 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                            <span>Terenkripsi Aman (UU PDP)</span>
+                        </span>
+                    </div>
                     <input type="text" name="identity_number" value="{{ old('identity_number') }}"
                         class="w-full px-4 py-2.5 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#346733] focus:border-[#346733] outline-none"
                         placeholder="16 digit NIK atau Nomor Paspor">
+                    <p class="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                        <span>Data NIK dienkripsi secara otomatis di database demi perlindungan privasi.</span>
+                    </p>
                     @error('identity_number')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
                 </div>
 
@@ -285,10 +295,20 @@ Side Effect: POST ke /jamaah/family, PUT ke /jamaah/family/{id}, DELETE ke /jama
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Nomor NIK / Paspor</label>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Nomor NIK / Paspor</label>
+                                <span class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200" title="Data NIK disimpan dengan enkripsi AES-256 terstandar UU PDP">
+                                    <svg class="w-3 h-3 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                                    <span>Terenkripsi Aman (UU PDP)</span>
+                                </span>
+                            </div>
                             <input type="text" name="identity_number" x-model="editMember.identity_number"
                                 class="w-full px-4 py-2.5 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#346733] focus:border-[#346733] outline-none"
                                 placeholder="16 digit NIK atau Nomor Paspor">
+                            <p class="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                                <span>Data NIK dienkripsi secara otomatis di database demi perlindungan privasi.</span>
+                            </p>
                         </div>
 
                         <div class="grid grid-cols-2 gap-3">
